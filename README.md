@@ -1,12 +1,12 @@
 # GAMMA Prone Fix
 
-Makes low-crouch ("prone") in **S.T.A.L.K.E.R. G.A.M.M.A.** actually useful — within the limits of what modding allows. It's a hacky workaround, not a proper prone system, and it shows.
+Makes low-crouch ("prone") in **S.T.A.L.K.E.R. G.A.M.M.A.** actually useful — within the limits of what modding allows. It's a hacky workaround, not a proper prone system., but it's better than what we have IMO.
 
 ## The problem
 
 Vanilla prone is fake. It's really just a low crouch: your view drops, but your body stays much higher. You can:
 
-- Think you're behind cover when you're not — enemies shoot over it easily
+- Think you're behind cover when you're not — enemies shoot you in the face.
 - Stick up or out of tight gaps (like a skinny pipe) while feeling fully hidden in first person
 
 ## What this mod does
@@ -19,24 +19,11 @@ Vanilla prone is fake. It's really just a low crouch: your view drops, but your 
 
 - **First person** — feels more like actual prone
 - **Third person** — looks ridiculous
-- Getting in and out of prone is rough and janky
-- Best effort given modding constraints — don't expect polish
-
-## Requirements
-
-- S.T.A.L.K.E.R. G.A.M.M.A.
-- [Mod Configuration Menu (MCM)](https://www.moddb.com/mods/stalker-anomaly/addons/anomaly-mod-configuration-menu)
+- Getting in and out of prone is janky but this only affects shadows (and it's less janky than current shadows anyway)
+- Best effort given modding constraints — also my first mod - don't expect too much
 
 ## Installation
 
-1. Install with Mod Organizer 2 (or merge into your game folder manually)
-2. Enable the mod
-3. **Load order matters** — put this **below** other mods that change player animations. It will conflict with them; whichever loads last wins
+1. Install via MCM like normal
 
-## Settings
-
-Open **MCM → Dorn's Prone Fix** to tweak camera height thresholds if stand/crouch/prone detection feels off. Debug logging is there if you need to troubleshoot.
-
-## How to use
-
-Crouch and walk slowly (don't sprint).
+**WARNING!** This mod overrides the `stalker_smart_cover_animation.omf` animations file so it wont play nice with other mods that do the same (If you know a better way, im listening)
