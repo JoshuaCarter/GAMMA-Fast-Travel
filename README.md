@@ -28,7 +28,7 @@ Vanilla prone is fake. It's really just a low crouch: your view drops, but your 
 
 ## Installation
 
-1. Download the latest release from here: https://github.com/JoshuaCarter/GAMMA-Prone-Fix/releases
+1. Download the latest release from here: https://github.com/JoshuaCarter/GAMMA-Prone-Fix/releases <img width="695" height="275" alt="Screenshot 2026-06-27 232624" src="https://github.com/user-attachments/assets/e91f0db7-fcc0-4195-a7f4-de0e3ee6b419" />
 2. Install via MCM like normal
 
 **WARNING!** This mod overrides the `stalker_smart_cover_animation.omf` animations file so it wont play nice with other mods that do the same (If you know a better way, im listening)
