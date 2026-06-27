@@ -1,0 +1,24 @@
+name: Package mod on release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build mod zip
+        run: |
+          zip -r "Dorns-Prone-Fix-${{ github.event.release.tag_name }}.zip" gamedata meta.ini
+
+      - name: Attach zip to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "Dorns-Prone-Fix-${{ github.event.release.tag_name }}.zip"
