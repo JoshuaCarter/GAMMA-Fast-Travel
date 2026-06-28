@@ -30,4 +30,7 @@ Vanilla prone is fake. It's really just a low crouch: your view drops, but your 
 
 1. Install via MCM like normal
 
-**WARNING!** This mod overrides the `stalker_smart_cover_animation.omf` animations file so it wont play nice with other mods that do the same (If you know a better way, im listening)
+## Warnings!
+
+- This mod overrides the `stalker_smart_cover_animation.omf` animations file so it wont play nice with other mods that do the same (If you know a better way, im listening)
+- This mod relies on calculations that use camera height, so you pose/posture will be broken in 3rd person etc.
