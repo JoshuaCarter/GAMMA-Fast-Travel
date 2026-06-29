@@ -14,17 +14,17 @@ local POSTURES = {
 }
 
 local LOG_TYPE = {
-	LIFECYCLE 		= {order = 0, color = _G.dorn_dbg.COLORS.gray},
-	HEIGHT 			= {order = 1, color = _G.dorn_dbg.COLORS.cyan},
-	HEIGHT_POSTURE 	= {order = 2, color = _G.dorn_dbg.COLORS.blue},
-	INPUT_POSTURE 	= {order = 3, color = _G.dorn_dbg.COLORS.yellow},
-	BONES 			= {order = 4, color = _G.dorn_dbg.COLORS.light_green},
-	STATE 			= {order = 5, color = _G.dorn_dbg.COLORS.green},
-	MOTION 			= {order = 6, color = _G.dorn_dbg.COLORS.red},
-	CROUCH 			= {order = 7, color = _G.dorn_dbg.COLORS.dark_orange},
-	ACCEL 			= {order = 8, color = _G.dorn_dbg.COLORS.dark_orange},
-	ANIM 			= {order = 9, color = _G.dorn_dbg.COLORS.light_pink},
-	DAMAGE 			= {order = 10, color = _G.dorn_dbg.COLORS.orange},
+	LIFECYCLE 		= {order = 0, color = "gray"},
+	HEIGHT 			= {order = 1, color = "cyan"},
+	HEIGHT_POSTURE 	= {order = 2, color = "blue"},
+	INPUT_POSTURE 	= {order = 3, color = "yellow"},
+	BONES 			= {order = 4, color = "light_green"},
+	STATE 			= {order = 5, color = "green"},
+	MOTION 			= {order = 6, color = "red"},
+	CROUCH 			= {order = 7, color = "dark_orange"},
+	ACCEL 			= {order = 8, color = "dark_orange"},
+	ANIM 			= {order = 9, color = "light_pink"},
+	DAMAGE 			= {order = 10, color = "orange"},
 }
 
 local CONFIG = {
@@ -40,7 +40,8 @@ local is_prone = nil
 local function log(log_type, msg)
 	if _G.dorn_dbg then
 		local slot = log_type or LOG_TYPE.LIFECYCLE
-		_G.dorn_dbg.write(MOD_ID, slot.order, "[ProneFix] " .. tostring(msg), slot.color)
+		local colors = _G.dorn_dbg.COLORS
+		_G.dorn_dbg.write(MOD_ID, slot.order, "[ProneFix] " .. tostring(msg), colors and colors[slot.color])
 	end
 end
 
