@@ -4,7 +4,7 @@
 	Prone (mcCrouch + mcAccel): play_cycle on a shared OMF motion.
 	Torch: camera-locked via mod_system_dorn_prone_fix.ltx (torch_inertion = false).
 ]]
-
+local blend_anims = get_console():get_bool("blend_move_anims")
 local MOD_ID = "dorn_prone_fix"
 
 local POSTURES = {
