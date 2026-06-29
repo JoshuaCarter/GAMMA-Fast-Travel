@@ -14,17 +14,17 @@ local POSTURES = {
 }
 
 local LOG_TYPE = {
-	LIFECYCLE 		= {order = 0, color = dorn_dbg.COLORS.gray},
-	HEIGHT 			= {order = 1, color = dorn_dbg.COLORS.cyan},
-	HEIGHT_POSTURE 	= {order = 2, color = dorn_dbg.COLORS.blue},
-	INPUT_POSTURE 	= {order = 3, color = dorn_dbg.COLORS.yellow},
-	BONES 			= {order = 4, color = dorn_dbg.COLORS.light_green},
-	STATE 			= {order = 5, color = dorn_dbg.COLORS.green},
-	MOTION 			= {order = 6, color = dorn_dbg.COLORS.red},
-	CROUCH 			= {order = 7, color = dorn_dbg.COLORS.dark_orange},
-	ACCEL 			= {order = 8, color = dorn_dbg.COLORS.dark_orange},
-	ANIM 			= {order = 9, color = dorn_dbg.COLORS.light_pink},
-	DAMAGE 			= {order = 10, color = dorn_dbg.COLORS.orange},
+	LIFECYCLE 		= {order = 0, color = _G.dorn_dbg.COLORS.gray},
+	HEIGHT 			= {order = 1, color = _G.dorn_dbg.COLORS.cyan},
+	HEIGHT_POSTURE 	= {order = 2, color = _G.dorn_dbg.COLORS.blue},
+	INPUT_POSTURE 	= {order = 3, color = _G.dorn_dbg.COLORS.yellow},
+	BONES 			= {order = 4, color = _G.dorn_dbg.COLORS.light_green},
+	STATE 			= {order = 5, color = _G.dorn_dbg.COLORS.green},
+	MOTION 			= {order = 6, color = _G.dorn_dbg.COLORS.red},
+	CROUCH 			= {order = 7, color = _G.dorn_dbg.COLORS.dark_orange},
+	ACCEL 			= {order = 8, color = _G.dorn_dbg.COLORS.dark_orange},
+	ANIM 			= {order = 9, color = _G.dorn_dbg.COLORS.light_pink},
+	DAMAGE 			= {order = 10, color = _G.dorn_dbg.COLORS.orange},
 }
 
 local CAMERA_HEIGHTS = {
@@ -38,8 +38,9 @@ local PRONE_DAMAGE_MULT = 1
 local is_prone = nil
 
 local function log(log_type, msg)
-	if dorn_dbg then
-		dorn_dbg.write(MOD_ID, log_type.order, "[ProneFix] " .. tostring(msg), log_type.color)
+	if _G.dorn_dbg then
+		local slot = log_type or LOG_TYPE.LIFECYCLE
+		_G.dorn_dbg.write(MOD_ID, slot.order, "[ProneFix] " .. tostring(msg), slot.color)
 	end
 end
 
@@ -185,18 +186,18 @@ local function cb_actor_on_before_hit(shit, bone_id, flags)
 end
 
 local function cb_sync_config()
-	if dorn_mcm then
-		if dorn_dbg then
-			dorn_dbg.set_enabled(MOD_ID, dorn_mcm.bool(MOD_ID, "development/debug_log", false))
+	if _G.dorn_mcm then
+		if _G.dorn_dbg then
+			_G.dorn_dbg.set_enabled(MOD_ID, _G.dorn_mcm.bool(MOD_ID, "development/debug_log", false))
 		end
 
 		CAMERA_HEIGHTS = {
-			STAND = dorn_mcm.number(MOD_ID, "development/cam_height_stand", 1.80),
-			CROUCH = dorn_mcm.number(MOD_ID, "development/cam_height_crouch", 1.34),
-			PRONE = dorn_mcm.number(MOD_ID, "development/cam_height_prone", 0.44),
+			STAND = _G.dorn_mcm.number(MOD_ID, "development/cam_height_stand", 1.80),
+			CROUCH = _G.dorn_mcm.number(MOD_ID, "development/cam_height_crouch", 1.34),
+			PRONE = _G.dorn_mcm.number(MOD_ID, "development/cam_height_prone", 0.44),
 		}
 
-		PRONE_DAMAGE_MULT = dorn_mcm.number(MOD_ID, "main/prone_damage_mult", 1.2)
+		PRONE_DAMAGE_MULT = _G.dorn_mcm.number(MOD_ID, "main/prone_damage_mult", 1.2)
 	end
 end
 
