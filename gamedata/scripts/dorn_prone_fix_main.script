@@ -4,7 +4,7 @@
 	Prone (mcCrouch + mcAccel): play_cycle on a shared OMF motion.
 	Torch: camera-locked via mod_system_dorn_prone_fix.ltx (torch_inertion = false).
 ]]
-
+local blend_anims = get_console():get_bool("blend_move_anims")
 local MOD_ID = "dorn_prone_fix"
 
 local POSTURES = {
@@ -154,10 +154,14 @@ local function on_actor_on_update()
 		is_prone = true
 		set_prone_bones_visible(actor, false)
 		play_motion(actor, "dorn_prone", false)
+		if blend_anims then
+			get_console():execute("blend_move_anims 0")
+		end
 	elseif is_prone then
 		-- show bones and trigger new idle motion on leaving prone (just once)
 		is_prone = false
 		set_prone_bones_visible(actor, true)
+		get_console():execute("blend_move_anims " .. (blend_anims and "1" or "0"))
 		if input_posture == POSTURES.STAND then
 			log(LOG_TYPE.STATE, "state: standing")
 			play_motion(actor, "norm_idle_0", true)
