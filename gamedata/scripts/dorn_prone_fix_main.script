@@ -46,6 +46,15 @@ local function log(log_type, msg)
 	end
 end
 
+local function on_option_change()
+	CONFIG.debug_log = _G.dorn_mcm.bool(MOD_ID, "development/debug_log", false)
+	CONFIG.cam_height_stand = _G.dorn_mcm.number(MOD_ID, "development/cam_height_stand", 1.65)
+	CONFIG.cam_height_crouch = _G.dorn_mcm.number(MOD_ID, "development/cam_height_crouch", 1.2)
+	CONFIG.cam_height_prone = _G.dorn_mcm.number(MOD_ID, "development/cam_height_prone", 0.45)
+	CONFIG.prone_damage_mult = _G.dorn_mcm.number(MOD_ID, "main/prone_damage_mult", 1.2)
+	_G.dorn_dbg.set_enabled(MOD_ID, CONFIG.debug_log)
+end
+
 local function get_nearest_posture_from_camera_height(actor)
 	-- get cam height from actor origin (feet)
 	local ok, height = pcall(function()
@@ -128,7 +137,7 @@ local function play_motion(actor, motion, mix_in)
 end
 
 local function on_actor_on_update()
-	local actor = db.actor
+	local _, actor = _G.dorn_sys.ready(MOD_ID, db, on_option_change)
 	if not actor then
 		return
 	end
@@ -196,6 +205,9 @@ local function on_actor_on_update()
 end
 
 local function on_actor_on_before_hit(shit, bone_id, flags)
+	if not _G.dorn_sys.ready(MOD_ID, db) then
+		return
+	end
 	if not is_prone or not shit or not shit.power or shit.power <= 0 then
 		return
 	end
@@ -208,22 +220,8 @@ local function on_actor_on_before_hit(shit, bone_id, flags)
 	log(LOG_TYPE.DAMAGE, string.format("damage: x%.2f: %.2f -> %.2f", CONFIG.prone_damage_mult, before, shit.power))
 end
 
-local function on_option_change()
-	if _G.dorn_mcm then
-		CONFIG.debug_log = _G.dorn_mcm.bool(MOD_ID, "development/debug_log", false)
-		CONFIG.cam_height_stand = _G.dorn_mcm.number(MOD_ID, "development/cam_height_stand", 1.65)
-		CONFIG.cam_height_crouch = _G.dorn_mcm.number(MOD_ID, "development/cam_height_crouch", 1.2)
-		CONFIG.cam_height_prone = _G.dorn_mcm.number(MOD_ID, "development/cam_height_prone", 0.45)
-		CONFIG.prone_damage_mult = _G.dorn_mcm.number(MOD_ID, "main/prone_damage_mult", 1.2)
-	end
-	if _G.dorn_dbg then
-		_G.dorn_dbg.set_enabled(MOD_ID, CONFIG.debug_log)
-	end
-end
-
 function on_game_start()
 	is_prone = nil
-	on_option_change()
 	RegisterScriptCallback("actor_on_update", on_actor_on_update)
 	RegisterScriptCallback("actor_on_before_hit", on_actor_on_before_hit)
 	RegisterScriptCallback("on_option_change", on_option_change)
