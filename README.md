@@ -33,7 +33,6 @@ Vanilla prone is fake. It's really just a low crouch: your view drops, but your 
 
 1. Download the latest release from here: https://github.com/JoshuaCarter/GAMMA-Prone-Fix/releases <img width="695" height="275" alt="Screenshot 2026-06-27 232624" src="https://github.com/user-attachments/assets/e91f0db7-fcc0-4195-a7f4-de0e3ee6b419" />
 2. Install via MO2 like normal
-3. **Requires [Dorns Common](https://github.com/JoshuaCarter/GAMMA-Common/releases)** — enable it **above** this mod in load order
 
 ## Warnings!
 
