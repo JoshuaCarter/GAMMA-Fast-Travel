@@ -1,19 +1,15 @@
 # Dorn's FPS Counter
 
-Simple Steam-style on-screen FPS counter for **S.T.A.L.K.E.R. G.A.M.M.A.**
+A simple FPS readout for **S.T.A.L.K.E.R. G.A.M.M.A.** — average FPS on screen, with an optional low/high range from recent readings.
 
-## Features
+## What this mod does
 
-- Average FPS over a configurable time window (default 1 second)
-- Optional min / max over the same window
-- Corner placement, colors, text size, opacity, and update rate via MCM
-- Keybind to toggle on / off (unbound by default)
+- Shows average FPS over a configurable time window
+- Optional lowest/highest fps in last X seconds
+- Place it anywhere on the HUD, small or large font, change text colour (RGBA), and how often the readout updates
+- Toggle on/off with a keybind (unbound by default), or start with it on/off by default
 
 ## Installation
 
 1. Download the latest release from [GAMMA-FPS-Counter](https://github.com/JoshuaCarter/GAMMA-FPS-Counter/releases)
 2. Install via MO2 like normal
-
-## MCM
-
-Open **Mod Configuration Menu → Dorn's FPS Counter** to adjust appearance and sampling.
