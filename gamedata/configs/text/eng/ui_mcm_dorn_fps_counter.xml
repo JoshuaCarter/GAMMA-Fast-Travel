@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="windows-1251"?>
+<string_table>
+	<string id="ui_mcm_menu_dorn_fps_counter">
+		<text>Dorn's FPS Counter</text>
+	</string>
+	<string id="ui_mcm_dorn_fps_counter_toggle_key">
+		<text>Toggle counter</text>
+	</string>
+	<string id="ui_mcm_dorn_fps_counter_enabled_default">
+		<text>On by default</text>
+	</string>
+	<string id="ui_mcm_dorn_fps_counter_location">
+		<text>Screen position</text>
+	</string>
+	<string id="ui_mcm_dorn_fps_counter_loc_tl">
+		<text>Top left</text>
+	</string>
+	<string id="ui_mcm_dorn_fps_counter_loc_tr">
+		<text>Top right</text>
+	</string>
+	<string id="ui_mcm_dorn_fps_counter_loc_bl">
+		<text>Bottom left</text>
+	</string>
+	<string id="ui_mcm_dorn_fps_counter_loc_br">
+		<text>Bottom right</text>
+	</string>
+	<string id="ui_mcm_dorn_fps_counter_text_size">
+		<text>Text size</text>
+	</string>
+	<string id="ui_mcm_dorn_fps_counter_show_minmax">
+		<text>Show min / max</text>
+	</string>
+	<string id="ui_mcm_dorn_fps_counter_time_scale">
+		<text>Sample window (seconds)</text>
+	</string>
+	<string id="ui_mcm_dorn_fps_counter_bg_color">
+		<text>Background color</text>
+	</string>
+	<string id="ui_mcm_dorn_fps_counter_text_color">
+		<text>Text color</text>
+	</string>
+	<string id="ui_mcm_dorn_fps_counter_update_rate">
+		<text>Updates per second</text>
+	</string>
+	<string id="ui_mcm_dorn_fps_counter_transparency">
+		<text>Opacity</text>
+	</string>
+</string_table>
