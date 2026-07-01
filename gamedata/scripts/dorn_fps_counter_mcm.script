@@ -86,7 +86,7 @@ function on_mcm_load()
 						min = 0,
 						max = 768,
 						step = 1,
-						def = 0,
+						def = 2,
 						hint = "dorn_fps_counter_pos_y",
 					},
 					{ id = "line_text", type = "line" },
