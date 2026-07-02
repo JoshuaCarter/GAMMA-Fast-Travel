@@ -7,6 +7,10 @@
 ]]
 
 local MOD_ID = "dorn_fps_counter"
+
+process_file("dorn_fps_counter_common")
+local DORN = dorn_fps_counter_common.get()
+
 local UI_WIDTH = 1024
 local UI_HEIGHT = 768
 
@@ -19,7 +23,7 @@ local CONFIG = {
 	toggle_key = nil,
 	enabled_default = true,
 	minmax_window = 5,
-	sample_window = 0.1,
+	sample_window = 0.5,
 	refresh_rate = 3,
 	pos_x = 0,
 	pos_y = 0,
@@ -45,8 +49,8 @@ local LOG = {
 }
 
 local function log(slot, msg)
-	if _G.dorn_dbg and CONFIG.debug_log then
-		_G.dorn_dbg.write(MOD_ID, slot.order, "[FPS] " .. tostring(msg), _G.dorn_dbg.COLORS[slot.color])
+	if DORN.dbg and CONFIG.debug_log then
+		DORN.dbg.write(MOD_ID, slot.order, "[FPS] " .. tostring(msg), slot.color)
 	end
 end
 
@@ -55,21 +59,21 @@ local function update_wait_until_time()
 end
 
 local function on_option_change()
-	CONFIG.enabled_default = _G.dorn_mcm.bool(MOD_ID, "main/enabled_default", true)
-	CONFIG.debug_log = _G.dorn_mcm.bool(MOD_ID, "development/debug_log", false)
-	CONFIG.toggle_key = _G.dorn_mcm.key(MOD_ID, "main/toggle_key", 0)
-	CONFIG.sample_window = _G.dorn_mcm.number(MOD_ID, "main/sample_window", 1)
-	CONFIG.minmax_window = _G.dorn_mcm.number(MOD_ID, "main/minmax_window", 5)
-	CONFIG.refresh_rate = _G.dorn_mcm.number(MOD_ID, "main/refresh_rate", 5)
-	CONFIG.font = FONTS[_G.dorn_mcm.number(MOD_ID, "main/font", 0)]
-	CONFIG.pos_x = _G.dorn_mcm.number(MOD_ID, "main/pos_x", 0)
-	CONFIG.pos_y = _G.dorn_mcm.number(MOD_ID, "main/pos_y", 0)
-	CONFIG.text_r = _G.dorn_mcm.number(MOD_ID, "main/text_r", 255)
-	CONFIG.text_g = _G.dorn_mcm.number(MOD_ID, "main/text_g", 255)
-	CONFIG.text_b = _G.dorn_mcm.number(MOD_ID, "main/text_b", 255)
-	CONFIG.text_a = _G.dorn_mcm.number(MOD_ID, "main/text_a", 255)
+	CONFIG.enabled_default = DORN.mcm.bool(MOD_ID, "main/enabled_default", true)
+	CONFIG.debug_log = DORN.mcm.bool(MOD_ID, "development/debug_log", false)
+	CONFIG.toggle_key = DORN.mcm.key(MOD_ID, "main/toggle_key", 0)
+	CONFIG.sample_window = DORN.mcm.number(MOD_ID, "main/sample_window", 0.5)
+	CONFIG.minmax_window = DORN.mcm.number(MOD_ID, "main/minmax_window", 5)
+	CONFIG.refresh_rate = DORN.mcm.number(MOD_ID, "main/refresh_rate", 3)
+	CONFIG.font = FONTS[DORN.mcm.number(MOD_ID, "main/font", 0)]
+	CONFIG.pos_x = DORN.mcm.number(MOD_ID, "main/pos_x", 0)
+	CONFIG.pos_y = DORN.mcm.number(MOD_ID, "main/pos_y", 0)
+	CONFIG.text_r = DORN.mcm.number(MOD_ID, "main/text_r", 255)
+	CONFIG.text_g = DORN.mcm.number(MOD_ID, "main/text_g", 255)
+	CONFIG.text_b = DORN.mcm.number(MOD_ID, "main/text_b", 255)
+	CONFIG.text_a = DORN.mcm.number(MOD_ID, "main/text_a", 255)
 
-	_G.dorn_dbg.set_enabled(MOD_ID, CONFIG.debug_log)
+	DORN.dbg.set_enabled(MOD_ID, CONFIG.debug_log)
 
 	local sample_len = math.max(1, math.floor(CONFIG.sample_window * 250 + 0.5))
 	if not sample_buf or sample_buf.cap ~= sample_len then
@@ -185,7 +189,7 @@ local function on_unique_update()
 end
 
 local function on_actor_on_update()
-	local ctx = _G.dorn_sys.ready(MOD_ID, db, on_option_change)
+	local ctx = DORN.sys.ready(MOD_ID, db, on_option_change)
 	if not ctx then
 		return
 	end
@@ -217,6 +221,8 @@ local function on_key_press(key)
 end
 
 function on_game_start()
+	dorn_fps_counter_common.init(MOD_ID)
+
 	init = false
 	visible = false
 	sample_buf = nil
