@@ -1,0 +1,59 @@
+-- Dorn's Fast Travel MCM
+
+function on_mcm_load()
+    local options = {
+        id = "dorn_fast_travel",
+        sh = true,
+        gr = {
+        { id = "title",        type = "slide", link = "ui_options_slider_player",
+          text = "ui_mcm_dft_title", size = {512, 50}, spacing = 20 },
+
+        { id = "enabled",      type = "check", val = 1, def = true },
+        { id = "mode",         type = "list", val = 2, content={{"stalker", "Stalker (Default)"}, {"tourist", "Tourist (Easy)"}}, def = "stalker" },
+        { id = "travel_speed", type = "track", val = 2, min = 10, max = 100, step = 1, def = 35 },
+        { id = "time_factor",  type = "track", val = 2, min = 1,  max = 50,  step = 1, def = 15 },
+        { id = "message_duration", type = "track", val = 2, min = 3, max = 30, step = 1, def = 10 },
+        { id = "weapon_restore_mode", type = "list", val = 2,
+          content={{"current", "Current weapon"}, {"primary", "Primary"}, {"secondary", "Secondary"}}, def = "current" },
+        { id = "line",         type = "line" },
+
+        { id = "interruption_enabled", type = "check", val = 1, def = true },
+        { id = "safe_zone_protection", type = "check", val = 1, def = true },
+        { id = "arrival_offset",       type = "track", val = 2, min = 0,  max = 50,  step = 5, def = 10 },
+        { id = "encounter_offset",     type = "track", val = 2, min = 0,  max = 50,  step = 5, def = 15 },
+        { id = "stealth_dodge_enabled", type = "check", val = 1, def = true },
+        { id = "stealth_rank_bonus",    type = "check", val = 1, def = true },
+        { id = "stealth_dodge_base",    type = "track", val = 2, min = 0, max = 100, step = 5, def = 15 },
+        { id = "stealth_dodge_max",     type = "track", val = 2, min = 0, max = 100, step = 5, def = 75 },
+        { id = "line",         type = "line" },
+
+        { id = "sneaky_travel_enabled", type = "check", val = 1, def = true },
+        { id = "sneaky_stealth_bonus",  type = "track", val = 2, min = 0, max = 50, step = 5, def = 25 },
+        { id = "sneaky_time_mult",      type = "track", val = 2, min = 1, max = 3, step = 0.1, def = 1.5 },
+        { id = "sneaky_cost_mult",      type = "track", val = 2, min = 1, max = 5, step = 0.1, def = 2.0 },
+        { id = "line",         type = "line" },
+
+        { id = "costs_enabled",        type = "check", val = 1, def = true },
+        { id = "stamina_drain_enabled",  type = "check", val = 1, def = true },
+        { id = "hunger_rate",          type = "track", val = 2, min = 0, max = 0.5, step = 0.01, def = 0.1 },
+        { id = "thirst_rate",          type = "track", val = 2, min = 0, max = 0.5, step = 0.01, def = 0.15 },
+        { id = "sleep_rate",           type = "track", val = 2, min = 0, max = 0.5, step = 0.01, def = 0.12 },
+        { id = "line",         type = "line" },
+
+        { id = "map_dots",               type = "track", val = 2, min = 4,  max = 24,  step = 1, def = 12 },
+        { id = "border_travel_only",     type = "check", val = 1, def = false },
+        { id = "weather_impact_enabled", type = "check", val = 1, def = true },
+        { id = "weight_impact_enabled",  type = "check", val = 1, def = true },
+        { id = "show_stats",             type = "check", val = 1, def = true },
+        { id = "line",         type = "line" },
+
+        { id = "debug_logging",          type = "check", val = 1, def = false },
+    }}
+
+    if game_fast_travel and zzz_dorn_fast_travel_fft_patch then
+        table.insert(options.gr, #options.gr, { id = "line", type = "line" })
+        table.insert(options.gr, #options.gr, { id = "enable_guide_travel", type = "check", val = 1, def = false })
+    end
+
+    return options
+end

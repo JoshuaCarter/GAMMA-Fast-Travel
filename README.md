@@ -1,18 +1,45 @@
-# Dorn's FPS Counter
+# Dorn's Fast Travel
 
-A simple FPS readout for **S.T.A.L.K.E.R. G.A.M.M.A.** — average FPS on screen, with an optional low/high range from recent readings.
+A maintained fork of **[The Long Road Ahead](https://www.moddb.com/mods/stalker-anomaly/addons/the-long-road-ahead)** (TLRA v2.2.0) by **Damage_Zedd**, with QoL fixes and extra travel options for GAMMA.
 
-## What this mod does
+**Replace** the original TLRA mod and its FFT compatibility patch with this mod in Mod Organizer 2. Keep **Fair Fast Travel** enabled.
 
-- Shows average FPS over a configurable time window
-- Optional lowest/highest fps in last X seconds
-- Place it anywhere on the HUD, small or large font, change text colour (RGBA), and how often the readout updates
-- Toggle on/off with a keybind (unbound by default), or start with it on/off by default
+## Credits
+
+- **The Long Road Ahead** — Damage_Zedd (base design, journey simulation, ambush system)
+- **Fair Fast Travel** — Catspaw (cost/duration integration)
+
+## Changes from TLRA
+
+- **No arrival fade-in** — removed `fade_in.ppe` on arrive, abort, and ambush
+- **Time acceleration works** — MCM time factor now scales real-time journey speed on the PDA map
+- **Weapon restore mode** — MCM: keep current weapon, force primary, or force secondary after travel
+- **Message duration** — configurable on-screen message time (default 10s)
+- **Rank sneak toggle** — disable rank bonus on ambush dodge rolls
+- **Ambush spawn offset** — separate slider from normal arrival offset
+- **Sneaky travel** — extra PDA option: higher cost/time, bonus sneak chance
+- **Cross-zone PDA options** — *Final leg only* and *Travel to zone exit* without toggling MCM
+- **Combat fix** — no stealth dodge while hostiles are already near you; no sneaking past active fights after transitions
 
 ## Installation
 
-1. Download the latest release from [GAMMA-FPS-Counter](https://github.com/JoshuaCarter/GAMMA-FPS-Counter/releases)
-2. Install via MO2 like normal
+1. Disable **The Long Road Ahead** and **TLRA Fair Fast Travel Patch** in MO2
+2. Enable **Dorn's Fast Travel** (load after Fair Fast Travel)
+3. Configure in MCM → **Dorn's Fast Travel**
 
-<img width="960" height="540" alt="screenshot_1" src="https://github.com/user-attachments/assets/d28635cb-cc67-4e69-9c69-e830eab15142" />
-<img width="500" height="408" alt="screenshot_2" src="https://github.com/user-attachments/assets/e073bc9e-8e02-424a-9887-5015ec93b679" />
+## Requirements
+
+- S.T.A.L.K.E.R. Anomaly / GAMMA
+- MCM
+- Fair Fast Travel (Catspaw)
+
+## Repository
+
+https://github.com/JoshuaCarter/GAMMA-Fast-Travel
+
+## Files
+
+- `gamedata/scripts/zzzz_dorn_fast_travel.script` — main travel logic
+- `gamedata/scripts/zzz_dorn_fast_travel_mcm.script` — MCM
+- `gamedata/scripts/zzz_dorn_fast_travel_fft_patch.script` — FFT hook
+- `gamedata/configs/text/eng/ui_mcm_dorn_fast_travel.xml` — strings
