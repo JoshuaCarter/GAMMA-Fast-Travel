@@ -1,0 +1,7 @@
+<w>
+	<!-- ui_dorn_skills.dds: 256x256 atlas, 2x2 skill icons (123x87 each, Haruka layout).
+	     Bottom-left slot = Scouting (replaces scavenging position in ui_icons_skills). -->
+	<file name ="ui\ui_dorn_skills">
+		<texture id = "ui_skills_icon_scouting" x="0" y="0" width="123" height="87" />
+	</file>
+</w>

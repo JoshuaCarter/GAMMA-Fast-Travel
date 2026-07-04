@@ -1,0 +1,17 @@
+<string_table>
+	<string id="st_player_skills_scouting">
+		<text>Scouting</text>
+	</string>
+	<string id="st_player_skills_hint_scouting">
+		<text>Improves fast-travel sneak odds and reduces hunger, thirst, and sleep costs while traveling.\n \nLevels are gained by sneaking past threats during travel and completing sneak journeys.\n \n</text>
+	</string>
+	<string id="st_skills_stats_scouting_sneak_bonus">
+		<text>\n%c[255,86,200,120]•%c[ui_6] Fast-travel sneak bonus: %c[d_green]+$stat%</text>
+	</string>
+	<string id="st_skills_stats_scouting_resource_reduction">
+		<text>\n%c[255,86,200,120]•%c[ui_6] Travel resource cost reduction: %c[d_green]$stat%</text>
+	</string>
+	<string id="st_new_level_scouting">
+		<text>$clr_green• $clr_whiteFast-travel sneak bonus improved\n$clr_cyan• $clr_whiteTravel resource costs reduced</text>
+	</string>
+</string_table>
