@@ -10,91 +10,51 @@
 	</string>
 
 	<string id="ui_mcm_dorn_fast_travel_travel_speed">
-		<text>Fastest PDA Map Speed</text>
+		<text>Fastest Travel Speed</text>
 	</string>
 	<string id="ui_mcm_dorn_fast_travel_travel_speed_desc">
-		<text>Maximum PDA map travel speed (m/s virtual) for normal travel at normal weight. Default 50. Sneak and encumbrance slow this further, lengthening the map bar and journey time (and survival cost). Lower values slow all travel proportionally.</text>
+		<text>How fast the PDA journey bar moves when lightly loaded (white inventory weight). Yellow weight (-20%% speed) and red weight (-50%% speed) slow you further. Sneaking is about 3x slower. Too encumbered to walk blocks walk/sneak travel; guides still work.</text>
 	</string>
 	<string id="ui_mcm_dorn_fast_travel_message_duration">
 		<text>Message Duration</text>
 	</string>
 	<string id="ui_mcm_dorn_fast_travel_message_duration_desc">
-		<text>How long on-screen travel messages stay visible (seconds).</text>
+		<text>How long travel notifications stay on screen (seconds).</text>
 	</string>
 	<string id="ui_mcm_dorn_fast_travel_ambush_detection_desc">
-		<text>Ambush scan radius (not dodge chance): 50 m day base, minus 10 m dawn/dusk, minus 20 m night, minus weather (rain 10 m, storm 15 m, foggy 20 m — stacks). Travel-block radius stays 50 m. On ambush: pull back by scan radius (×2 sneaking, max 60 m). Hostiles alerted 1 s after spawn; you are invulnerable until then. Clear arrival: 5 m before destination when clear.</text>
+		<text>Ambushes: dodge chance is Sneaking skill + sneak mode only (sneak doubles, 95%% cap). Visibility scan = time base (day 50 m, dawn/dusk 40 m, night 30 m) minus weather (best only: rain -10 m, storm -15 m, fog -20 m; 10 m floor). If spotted, you are dropped short and must fight. Guides cannot be ambushed. Cannot start with enemies within 50 m.</text>
 	</string>
-	<string id="ui_mcm_dorn_fast_travel_stealth_dodge_base">
-		<text>Base Ambush Dodge Chance (Scouting Lv 1)</text>
-	</string>
-	<string id="ui_mcm_dorn_fast_travel_stealth_dodge_base_desc">
-		<text>Chance to avoid an ambush before Scouting bonuses. Sneak mode doubles this. Time of day and weather do not change dodge chance. Default 20%; can only be lowered.</text>
-	</string>
-	<string id="ui_mcm_dorn_fast_travel_guide_cost_per_km">
-		<text>Guide Cost per km</text>
-	</string>
-	<string id="ui_mcm_dorn_fast_travel_guide_cost_per_km_desc">
-		<text>Rubles per 1000 meters of travel distance. Default 2000; can only be increased.</text>
+	<string id="ui_mcm_dorn_fast_travel_guide_cost_desc">
+		<text>Guide travel (instant jump to a base on another map): Easy 2000 RU/km, Medium 2500 RU/km, Hard 3000 RU/km.</text>
 	</string>
 	<string id="ui_mcm_dorn_fast_travel_debug_overlay">
 		<text>Debug Overlay</text>
 	</string>
 	<string id="ui_mcm_dorn_fast_travel_debug_overlay_desc">
-		<text>Show on-screen debug summary (sneak rolls, trip stats).</text>
+		<text>Show on-screen travel debug info.</text>
 	</string>
 	<string id="ui_mcm_dorn_fast_travel_debug_log">
 		<text>Debug Log</text>
 	</string>
 	<string id="ui_mcm_dorn_fast_travel_debug_log_desc">
-		<text>Write detailed travel debug lines to xray_khada.log via printf. Errors always log regardless of this setting.</text>
+		<text>Write extra travel details to the game log.</text>
 	</string>
 	<string id="ui_mcm_dorn_fast_travel_path_preview">
 		<text>Path Preview on Menu Open</text>
 	</string>
 	<string id="ui_mcm_dorn_fast_travel_path_preview_desc">
-		<text>When enabled, right-clicking a travel destination draws grey path dots on the PDA before you start a journey. Off by default.</text>
+		<text>Show the route on the PDA when you right-click a destination, before you start travelling. Off by default.</text>
 	</string>
-	<string id="ui_mcm_dorn_fast_travel_scouting_level_up">
-		<text>Scouting Level Up</text>
+	<string id="ui_mcm_dorn_fast_travel_sneaking_level_up">
+		<text>Sneaking Level Up</text>
 	</string>
-	<string id="ui_mcm_dorn_fast_travel_scouting_level_up_desc">
-		<text>Development keybind: increase Scouting skill level by 1.</text>
+	<string id="ui_mcm_dorn_fast_travel_sneaking_level_up_desc">
+		<text>Development keybind: increase Sneaking skill level by 1.</text>
 	</string>
-	<string id="ui_mcm_dorn_fast_travel_scouting_level_down">
-		<text>Scouting Level Down</text>
+	<string id="ui_mcm_dorn_fast_travel_sneaking_level_down">
+		<text>Sneaking Level Down</text>
 	</string>
-	<string id="ui_mcm_dorn_fast_travel_scouting_level_down_desc">
-		<text>Development keybind: decrease Scouting skill level by 1.</text>
-	</string>
-
-	<string id="dft_menu_travel_here">
-		<text>Travel here</text>
-	</string>
-	<string id="dft_menu_sneaky_travel">
-		<text>Sneak here</text>
-	</string>
-	<string id="dft_menu_cancel_travel">
-		<text>Cancel journey</text>
-	</string>
-	<string id="dft_msg_hostiles_nearby">
-		<text>Hostiles are too close - deal with them before traveling.</text>
-	</string>
-	<string id="dft_msg_cross_zone_denied">
-		<text>You can only fast travel within the current zone. Use a zone exit or hire a guide.</text>
-	</string>
-	<string id="dft_msg_zone_exit_reached">
-		<text>Zone exit reached.</text>
-	</string>
-	<string id="dft_msg_arrival_ambush">
-		<text>Hostiles at destination - dropped short %d time(s) (unavoidable ambush).</text>
-	</string>
-	<string id="dft_msg_encounters_avoided">
-		<text>You avoided %d encounter(s) along the way.</text>
-	</string>
-	<string id="dft_msg_no_encounters">
-		<text>No encounters to avoid along the way.</text>
-	</string>
-	<string id="dft_msg_guide_paid">
-		<text>Guide hired: %d RU paid.</text>
+	<string id="ui_mcm_dorn_fast_travel_sneaking_level_down_desc">
+		<text>Development keybind: decrease Sneaking skill level by 1.</text>
 	</string>
 </string_table>

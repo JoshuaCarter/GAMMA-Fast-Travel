@@ -1,0 +1,20 @@
+<string_table>
+	<string id="st_player_skills_sneaking">
+		<text>Sneaking</text>
+	</string>
+	<string id="st_player_skills_hint_sneaking">
+		<text>Improves fast-travel sneak odds, speeds up PDA map travel, and increases ambush spawn distance.\n \nLevels are gained by sneaking past threats during travel and completing sneak journeys.\n \n</text>
+	</string>
+	<string id="st_skills_stats_sneaking_sneak_bonus">
+		<text>\n%c[255,86,200,120]*%c[ui_6] Fast-travel sneak bonus: %c[d_green]$stat%</text>
+	</string>
+	<string id="st_skills_stats_sneaking_travel_speed_bonus">
+		<text>\n%c[255,86,200,120]*%c[ui_6] PDA travel speed: %c[d_green]$stat%</text>
+	</string>
+	<string id="st_skills_stats_sneaking_ambush_spawn_bonus">
+		<text>\n%c[255,86,200,120]*%c[ui_6] Ambush spawn distance: %c[d_green]+$stat m</text>
+	</string>
+	<string id="st_new_level_sneaking">
+		<text>$clr_green* $clr_whiteFast-travel sneak bonus improved\n$clr_cyan* $clr_whitePDA travel speed increased\n$clr_cyan* $clr_whiteAmbush spawn distance increased</text>
+	</string>
+</string_table>

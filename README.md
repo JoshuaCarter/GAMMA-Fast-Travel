@@ -1,45 +1,25 @@
 # Dorn's Fast Travel
 
-A maintained fork of **[The Long Road Ahead](https://www.moddb.com/mods/stalker-anomaly/addons/the-long-road-ahead)** (TLRA v2.2.0) by **Damage_Zedd**, redesigned for same-zone travel with sneak mechanics and GAMMA integration.
+PDA map travel with a visible journey, ambushes along the way, optional sneaking, and a new related skill to level - for **S.T.A.L.K.E.R. G.A.M.M.A.**
 
-**Replace** the original TLRA mod in Mod Organizer 2. Fair Fast Travel is **not required** — this mod provides its own PDA travel menus and journey system. If FFT is still enabled, its map handlers are unregistered and its trips are blocked automatically.
+## What this mod does
 
-## Credits
+- Adds right-click fast travel options to your PDA map - bases, campfires, zone exits, and own stashes.
+- Suppresses other default fast travel options in GAMMA.
+- **Travel here** - normal pace; about one in-game hour per kilometer. Can only be used on the current map.
+- **Sneak here** - much slower, but better odds of slipping past trouble. Can only be used on the current map.
+- **Hire guide** - pay rubles to jump to any base or backpack stash you own on any map instantly (also supports Anomalous Stashes mod).
+- Animated dot path on the map while you travel.
+- Hunger, thirst, and sleep are consumed at the normal rate for time-passed.
+- New 'Sneaking' skill lets you get better at sneaking past encounters the more you do it, travel faster, and spot ambushes from further away.
+- Time of day and weather reduce the odds of ambush by reducing your detection range, but that means that when an ambush happens you'll be closer to the enemy.
+- Travel time increases with encumberance (in line with UI encumberance icons).
 
-- **The Long Road Ahead** — Damage_Zedd (base journey simulation, ambush system)
-- **Skill System** — Haruka (Scouting skill integration)
+In-game guide: **PDA → Guide → Addons → Dorn's Fast Travel**
 
-## Features
-
-- **PDA destinations** — bases (house icon), campfires (with map spots), fast-travel markers, and zone transition points
-- **Same-zone travel** — animated journey within the current map; cross-zone destinations require a guide or zone exits
-- **Two travel modes** — `Travel here (Xh Xm, X% sneak)` and `Sneak here (Xh Xm, X% sneak)`
-- **Travel time** — driven by PDA map speed: default fastest pace is 50 (1 hr/km game time at normal weight). Sneak is ⅓ speed (3 hr/km). MCM **Fastest PDA Map Speed** sets that ceiling (up to 100); sneak and encumbrance slow from there.
-- **Cancel travel** — free because game time never moves during the PDA bar. Hunger/thirst/sleep only apply when the clock jumps at arrival (or partial jump on ambush); cancel skips that and returns you to where you started
-- **No ruble cost** for animated travel; guided instant travel costs rubles (default **2000 RU per km**, MCM slider up to 5000)
-- **Scouting skill** (Haruka) — max level 20; +3% sneak per level; 5 XP per km of sneak travel, 10 XP per ambush dodged
-- **Ambush detection** — scan radius from 50 m day base, minus time and weather (stacked). On ambush, pull back by **scan radius** (**×2** sneaking, **max 60 m**). Normal-travel ambush sets stamina to **50%**. Hostiles alerted **1 s** after spawn; invulnerable until then. Clear arrival: **5 m** before destination.
-- **Ambush dodge** — base chance plus Scouting skill; Sneak mode doubles it. No night/rain bonus to dodge.
-- **Survival costs** — hunger/thirst/sleep from the game-time jump only (journey length × map speed; sneak = 3× longer)
-- **Encumbrance** — matches GAMMA inventory weight colours: normal (full map speed), near-max yellow (−25%), overweight red (speed ÷ carry ratio). Sneak is ⅓ map speed on top of that, so heavy + sneak is very slow and costly.
-- **No arrival fade-in**
+Credit to damage_zedd and his **The Long Road Ahead** mod which hugely inspired this one.
 
 ## Installation
 
-1. Disable **The Long Road Ahead** and **TLRA Fair Fast Travel Patch** in MO2 (optional: disable **Fair Fast Travel** — Dorn's replaces it if left enabled)
-2. Enable **Dorn's Fast Travel** and **Dorns_Common** in MO2
-3. Configure in MCM → **Dorn's Fast Travel**
-4. Read **PDA → Guide → Addons → Dorn's Fast Travel** for how the system works
-
-Campfires on the PDA map require a mod that adds campfire map spots (e.g. **Display Campfires on Map**).
-
-## Requirements
-
-- S.T.A.L.K.E.R. Anomaly / GAMMA
-- MCM
-- **Dorns_Common**
-- Skill System — Haruka (for Scouting skill)
-
-## Repository
-
-https://github.com/JoshuaCarter/GAMMA-Fast-Travel
+1. Install via MO2 like normal
+3. Disable **The Long Road Ahead** if you were using it - this mod replaces that style of travel

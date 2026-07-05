@@ -1,48 +1,13 @@
 <string_table>
-	<string id="dft_msg_too_wounded">
-		<text>You are too wounded to begin this journey.</text>
+	<!-- PDA map menu -->
+	<string id="dft_menu_travel_here">
+		<text>Travel here</text>
 	</string>
-	<string id="dft_msg_must_stop_bleeding">
-		<text>You must stop the bleeding before traveling.</text>
+	<string id="dft_menu_sneaky_travel">
+		<text>Sneak here</text>
 	</string>
-	<string id="dft_msg_too_close">
-		<text>Destination is too close.</text>
-	</string>
-	<string id="dft_msg_heading_border">
-		<text>Heading to zone exit...</text>
-	</string>
-	<string id="dft_msg_journey_begins">
-		<text>The journey begins...</text>
-	</string>
-	<string id="dft_msg_cannot_afford">
-		<text>You cannot afford the guide fee (%s RU).</text>
-	</string>
-	<string id="dft_msg_cannot_travel_here">
-		<text>Cannot fast travel here.</text>
-	</string>
-	<string id="dft_msg_resuming">
-		<text>Resuming journey...</text>
-	</string>
-	<string id="dft_msg_ru_refunded">
-		<text>, %d RU refunded</text>
-	</string>
-	<string id="dft_msg_aborted">
-		<text>Journey aborted at %d%%.%s</text>
-	</string>
-	<string id="dft_msg_cancelled">
-		<text>Journey cancelled.</text>
-	</string>
-	<string id="dft_msg_combat_cancelled">
-		<text>Combat detected — journey cancelled.</text>
-	</string>
-	<string id="dft_msg_interrupted">
-		<text>Journey interrupted at %d%%.%s</text>
-	</string>
-	<string id="dft_msg_dest_reached_stats">
-		<text>Destination reached. Distance: %dm. Time elapsed: %s.</text>
-	</string>
-	<string id="dft_msg_events_summary">
-		<text>\nEvents: Survived %d ambushes, found %d positive events.</text>
+	<string id="dft_menu_cancel_travel">
+		<text>Cancel journey</text>
 	</string>
 	<string id="dft_menu_hire_guide">
 		<text>Hire guide (instant)</text>
@@ -50,61 +15,64 @@
 	<string id="dft_menu_free">
 		<text>Free</text>
 	</string>
-	<string id="dft_stealth_dodged">
-		<text>Stealth Success: You slipped past a threat (%d%% chance).</text>
+	<string id="dft_menu_travel_format">
+		<text>%s (%s, %s, %d%% sneak)</text>
 	</string>
-	<string id="dft_road_thick_brush">
-		<text>You push forward through the thick brush...</text>
+	<string id="dft_menu_guide_format">
+		<text>%s [%s]</text>
 	</string>
-	<string id="dft_road_dead_trees">
-		<text>The wind howls through the dead trees...</text>
+	<string id="dft_ru_amount">
+		<text>%d RU</text>
 	</string>
-	<string id="dft_road_muddy_ground">
-		<text>The ground is uneven and muddy here...</text>
+
+	<!-- Travel blocked / cannot start -->
+	<string id="dft_msg_too_wounded">
+		<text>You are too wounded to travel.</text>
 	</string>
-	<string id="dft_road_heavy_zone">
-		<text>The zone feels particularly heavy today...</text>
+	<string id="dft_msg_must_stop_bleeding">
+		<text>You must stop the bleeding before traveling.</text>
 	</string>
-	<string id="dft_road_crows">
-		<text>You spot a group of crows circling overhead...</text>
+	<string id="dft_msg_too_encumbered">
+		<text>Too encumbered to travel.</text>
 	</string>
-	<string id="dft_road_mutant_howl">
-		<text>Distant mutants howl in the distance...</text>
+	<string id="dft_msg_too_close">
+		<text>Destination is too close.</text>
 	</string>
-	<string id="dft_road_wipe_sweat">
-		<text>You wipe sweat from your brow, keeping your eyes on the horizon...</text>
+	<string id="dft_msg_hostiles_nearby">
+		<text>Hostiles are too close - deal with them before traveling.</text>
 	</string>
-	<string id="dft_road_rustle_grass">
-		<text>A rustle in the grass makes you tighten your grip on your weapon...</text>
+	<string id="dft_msg_cross_zone_denied">
+		<text>You can only fast travel within the current zone. Use a zone exit or hire a guide.</text>
 	</string>
-	<string id="dft_road_desolate_beauty">
-		<text>You pause for a second, admiring the desolate beauty of the Zone...</text>
+	<string id="dft_msg_cannot_afford">
+		<text>You cannot afford the guide fee (%s RU).</text>
 	</string>
-	<string id="dft_road_anomaly_hum">
-		<text>The distant hum of an anomaly field keeps you on edge...</text>
+	<string id="dft_msg_cannot_travel_here">
+		<text>Cannot fast travel here.</text>
 	</string>
-	<string id="dft_pos_peace">
-		<text>You find a moment of peace, catching your breath...</text>
+
+	<!-- Journey end - one full message per result (script picks a single id) -->
+	<string id="dft_msg_journey_cancelled">
+		<text>Journey cancelled.</text>
 	</string>
-	<string id="dft_pos_meditative">
-		<text>The rhythmic sound of your footsteps is almost meditative...</text>
+	<string id="dft_summary_arrived">
+		<text>Destination reached after %s.</text>
 	</string>
-	<string id="dft_pos_ru_stash">
-		<text>You find a small, forgotten stash of 150 RU in a hollow log.</text>
+	<string id="dft_summary_arrived_short">
+		<text>Hostiles at destination - stopped %dm short.</text>
 	</string>
-	<string id="dft_pos_sun_breaks">
-		<text>The sun breaks through the clouds, raising your spirits.</text>
+	<string id="dft_summary_arrived_avoided">
+		<text>Destination reached after %s. Avoided %d encounters along the way.</text>
 	</string>
-	<string id="dft_pos_med_stash">
-		<text>You find a medical stash tucked into a crevice.</text>
+	<string id="dft_summary_arrived_short_avoided">
+		<text>Hostiles at destination - stopped %dm short. Avoided %d encounters along the way.</text>
 	</string>
-	<string id="dft_pos_ammo_crate">
-		<text>You spot an abandoned ammunition crate in the ruins.</text>
+	<string id="dft_summary_ambushed">
+		<text>Ambushed from %dm away.</text>
 	</string>
-	<string id="dft_pos_artifact">
-		<text>You discover a faint shimmer in a patch of grass... an artifact!</text>
-	</string>
-	<string id="dft_pos_ridge_view">
-		<text>The view from this ridge is breathtaking. You take a moment to soak it in.</text>
+
+	<!-- Guide -->
+	<string id="dft_msg_guide_paid">
+		<text>Guide hired: %d RU paid.</text>
 	</string>
 </string_table>

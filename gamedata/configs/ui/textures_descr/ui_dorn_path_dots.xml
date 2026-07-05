@@ -1,5 +1,5 @@
 <w>
-	<!-- dots.dds: 64x32 — grey (left), green (right), 32x32 each -->
+	<!-- dots.dds: 64x32 - grey (left), green (right), 32x32 each -->
 	<file name="ui\dots">
 		<texture id="ui_dorn_path_dot_grey" x="0" y="0" width="32" height="32" />
 		<texture id="ui_dorn_path_dot_green" x="32" y="0" width="32" height="32" />

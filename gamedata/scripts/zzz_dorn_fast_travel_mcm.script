@@ -1,5 +1,4 @@
 -- Dorn's Fast Travel MCM
--- Gameplay sliders default to hardest where applicable; only harder adjustments allowed.
 
 function on_mcm_load()
 	return {
@@ -37,26 +36,11 @@ function on_mcm_load()
 						type = "desc",
 						text = "ui_mcm_dorn_fast_travel_ambush_detection_desc",
 					},
-					{
-						id = "stealth_dodge_base",
-						type = "track",
-						val = 2,
-						min = 0,
-						max = 20,
-						step = 1,
-						def = 20,
-						hint = "dorn_fast_travel_stealth_dodge_base",
-					},
 					{ id = "line_guide", type = "line" },
 					{
-						id = "guide_cost_per_km",
-						type = "track",
-						val = 2,
-						min = 2000,
-						max = 5000,
-						step = 100,
-						def = 2000,
-						hint = "dorn_fast_travel_guide_cost_per_km",
+						id = "guide_cost_desc",
+						type = "desc",
+						text = "ui_mcm_dorn_fast_travel_guide_cost_desc",
 					},
 				},
 			},
@@ -88,18 +72,18 @@ function on_mcm_load()
 					},
 					{ id = "line_dev", type = "line" },
 					{
-						id = "scouting_level_up",
+						id = "sneaking_level_up",
 						type = "key_bind",
 						val = 2,
 						def = -1,
-						hint = "dorn_fast_travel_scouting_level_up",
+						hint = "dorn_fast_travel_sneaking_level_up",
 					},
 					{
-						id = "scouting_level_down",
+						id = "sneaking_level_down",
 						type = "key_bind",
 						val = 2,
 						def = -1,
-						hint = "dorn_fast_travel_scouting_level_down",
+						hint = "dorn_fast_travel_sneaking_level_down",
 					},
 				},
 			},

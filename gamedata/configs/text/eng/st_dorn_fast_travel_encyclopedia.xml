@@ -1,50 +1,69 @@
 <?xml version="1.0" encoding="windows-1251"?>
 <string_table>
 
-	<!-- Optional: if Fair Fast Travel is still installed, redirect its guide entry to ours -->
 	<string id="encyclopedia_addons_fair_fast_travel">
 		<text>Fair Fast Travel</text>
 	</string>
 
 	<string id="encyclopedia_addons_fair_fast_travel_text">
-		<text>%c[ui_gray_1]Fair Fast Travel is disabled when using %c[pda_yellow]Dorn's Fast Travel%c[ui_gray_1] (see guide).\n
-			\n%c[pda_white]Open %c[pda_yellow]PDA Guide > Addons > Dorn's Fast Travel%c[pda_white] for how animated PDA travel works in this modpack.
+		<text>%c[ui_gray_1]Fair Fast Travel is replaced by %c[pda_yellow]Dorn's Fast Travel%c[ui_gray_1].\n
+			\n%c[pda_white]See %c[pda_yellow]PDA Guide > Addons > Dorn's Fast Travel%c[pda_white] for how travel works.
 		</text>
 	</string>
 
-	<!-- Dorn's Fast Travel guide -->
 	<string id="encyclopedia_addons_dorn_fast_travel">
-		<text>Dorn's Fast Travel: Addon Overview</text>
+		<text>Dorn's Fast Travel</text>
 	</string>
 
 	<string id="encyclopedia_addons_dorn_fast_travel_text">
 		<text>%c[ui_gray_1]
-			\n%c[pda_yellow]Dorn's Fast Travel%c[ui_gray_1] replaces instant map teleport with an animated journey inside the current zone. Right-click a destination on your PDA map to see travel options.\n
+			\n%c[pda_yellow]Dorn's Fast Travel%c[ui_gray_1] lets you move around the Zone from the PDA map instead of walking every metre yourself.\n
 
-			\n%c[pda_green]GETTING AROUND\n
-			%c[pda_white]- %c[ui_gray_1]%c[pda_yellow]Travel here%c[ui_gray_1]: normal pace on the PDA route bar. No ruble fare.\n
-			%c[pda_white]- %c[ui_gray_1]%c[pda_yellow]Sneak here%c[ui_gray_1]: about 1/3 map speed (3x longer), better ambush dodge chance, and a longer ambush pull-back.\n
-			%c[pda_white]- %c[ui_gray_1]Same-zone only for animated travel. Cross-zone trips need a %c[pda_yellow]zone exit%c[ui_gray_1] or %c[pda_yellow]Hire guide (instant)%c[ui_gray_1] on the map (rubles, no journey or survival drain).\n
+			\n%c[pda_green]HOW TO TRAVEL\n
+			%c[pda_white]- %c[ui_gray_2]Open the PDA map and %c[pda_yellow]right-click%c[ui_gray_2] a destination - bases, campfires, zone exits, your own stashes, and similar markers.\n
+			%c[pda_white]- %c[pda_yellow]Travel here%c[ui_gray_2]: normal speed. Free. About one game hour per kilometre at normal weight on the same map.\n
+			%c[pda_white]- %c[pda_yellow]Sneak here%c[ui_gray_2]: about %c[pda_yellow]3x slower%c[ui_gray_2] than normal travel, but much better odds of avoiding ambushes.\n
+			%c[pda_white]- %c[pda_yellow]Hire guide%c[ui_gray_2]: pay rubles for an instant jump (usually to a base on another map). Fee depends on difficulty and distance.\n
+			%c[pda_white]- %c[ui_gray_2]Your own backpack stashes (and anomalous stashes if installed): %c[pda_yellow]Hire guide%c[ui_gray_2] only.\n
+			%c[pda_white]- %c[ui_gray_2]Animated walk travel works %c[pda_yellow]only within your current map%c[ui_gray_2]. Use a zone exit or hire a guide to leave the area.\n
 
-			\n%c[pda_green]PDA MAP SPEED AND TIME\n
-			%c[pda_white]- %c[ui_gray_1]Journey time follows PDA map speed, not a separate timer. Default fastest pace is 50 (about 1 game hour per km at normal weight).\n
-			%c[pda_white]- %c[ui_gray_1]%c[pda_yellow]Encumbrance%c[ui_gray_1] slows the bar: yellow near-max weight (-25%), red overweight (speed divided by carry ratio).\n
-			%c[pda_white]- %c[ui_gray_1]Game time does not tick while the PDA bar moves. It jumps once at arrival (or partially on ambush). Hunger, thirst, and sleep follow that jump only — sneak costs more because the jump is longer.\n
-			%c[pda_white]- %c[ui_gray_1]Cancel journey: no time jump, no survival cost. You return to where you started.\n
+			\n%c[pda_green]WHILE YOU TRAVEL\n
+			%c[pda_white]- %c[ui_gray_2]Dots show your route on the map. The game clock is frozen until you arrive or are interrupted.\n
+			%c[pda_white]- %c[ui_gray_2]Right-click the map and choose %c[pda_yellow]Cancel journey%c[ui_gray_2] (or Back/Esc) to stop - you stay where you started and lose no time.\n
+			%c[pda_white]- %c[ui_gray_2]When you arrive, hunger, thirst, and tiredness catch up for the trip time. Longer trips (sneaking, heavy loads) cost more.\n
+
+			\n%c[pda_green]ENCUMBRANCE (INVENTORY WEIGHT)\n
+			%c[pda_white]- %c[ui_gray_2]Uses the same weight colours as your inventory screen - not the HUD encumbrance icon.\n
+			%c[pda_white]- %c[pda_yellow]White weight%c[ui_gray_2]: normal map travel speed.\n
+			%c[pda_white]- %c[pda_yellow]Yellow weight%c[ui_gray_2] (within 10 kg of max carry): %c[pda_yellow]-20%%%c[ui_gray_2] map speed; trips take about 25%% longer.\n
+			%c[pda_white]- %c[pda_yellow]Red weight%c[ui_gray_2] (over max carry): %c[pda_yellow]-50%%%c[ui_gray_2] map speed; trips take twice as long.\n
+			%c[pda_white]- %c[pda_yellow]Too encumbered to move%c[ui_gray_2] (cannot walk in the world): you cannot start walk or sneak travel. %c[pda_yellow]Hire guide%c[ui_gray_2] still works - guides carry your gear.\n
+
+			\n%c[pda_green]SNEAKING SKILL\n
+			%c[pda_white]- %c[ui_gray_2]Gained by sneaking past threats and finishing sneak journeys. Open the skills menu (%c[pda_yellow]K%c[ui_gray_2] by default) for exact stats.\n
+			%c[pda_white]- %c[ui_gray_2]Each level adds (approx.):\n
+			%c[pda_white]  - %c[pda_yellow]+3%%%c[ui_gray_2] ambush dodge chance\n
+			%c[pda_white]  - %c[pda_yellow]+2%%%c[ui_gray_2] PDA map travel speed\n
+			%c[pda_white]  - %c[pda_yellow]+1 m%c[ui_gray_2] extra distance when ambushes drop you short of your goal\n
+			%c[pda_white]- %c[ui_gray_2]Everyone starts with about %c[pda_yellow]20%%%c[ui_gray_2] base dodge before Sneaking bonuses.\n
 
 			\n%c[pda_green]AMBUSHES\n
-			%c[pda_white]- %c[ui_gray_1]Travel is blocked if hostiles are within 50 m (horizontal, 10 m vertical).\n
-			%c[pda_white]- %c[ui_gray_1]During a trip, ambush %c[pda_yellow]scan radius%c[ui_gray_1]: 50 m day base, minus 10 m dawn/dusk, minus 20 m night, minus weather (rain 10 m, storm 15 m, foggy 20 m — stacks; not dodge chance).\n
-			%c[pda_white]- %c[ui_gray_1]%c[pda_yellow]Dodge chance%c[ui_gray_1]: base value plus Scouting skill; Sneak mode doubles it. Weather does not change dodge chance.\n
-			%c[pda_white]- %c[ui_gray_1]If an ambush triggers, you are pulled back by scan radius (×2 sneaking, max 60 m). Normal-travel ambushes cut stamina to half. Hostiles are alerted 1 s after you arrive; you are invulnerable until then.\n
-			%c[pda_white]- %c[ui_gray_1]Clear arrivals spawn 5 m before the destination.\n
+			%c[pda_white]- %c[ui_gray_2]You cannot start travel with enemies within about %c[pda_yellow]50 m%c[ui_gray_2].\n
+			%c[pda_white]- %c[ui_gray_2]Along the route, patrols may spot you. Your %c[pda_yellow]dodge chance%%%c[ui_gray_2] (Sneaking skill + sneak mode only) is shown when you pick Travel or Sneak. If you fail, you are dropped short and must fight.\n
+			%c[pda_white]- %c[pda_yellow]Sneak here%c[ui_gray_2] doubles your dodge chance (up to %c[pda_yellow]95%%%c[ui_gray_2] cap).\n
+			%c[pda_white]- %c[pda_yellow]Hire guide%c[ui_gray_2] trips cannot be ambushed.\n
 
-			\n%c[pda_green]PDA ROUTE LINE\n
-			%c[pda_white]- %c[ui_gray_1]A dot path is drawn when travel starts (grey ahead, green behind). Dots every 20 m along the engine route.\n
-			%c[pda_white]- %c[ui_gray_1]Right-click anywhere on the PDA map during travel and choose Cancel journey (Back/Esc also works).\n
+			\n%c[pda_green]VISIBILITY (TIME AND WEATHER)\n
+			%c[pda_white]- %c[ui_gray_2]How far patrols can spot you along the route (ambush scan radius). Does not change dodge chance.\n
+			%c[pda_white]- %c[pda_yellow]Day%c[ui_gray_2] (7 AM - 7 PM): %c[pda_yellow]50 m%c[ui_gray_2]. %c[pda_yellow]Dawn/dusk%c[ui_gray_2] (6-7 AM, 7-8 PM): %c[pda_yellow]40 m%c[ui_gray_2]. %c[pda_yellow]Night%c[ui_gray_2] (8 PM - 6 AM): %c[pda_yellow]30 m%c[ui_gray_2].\n
+			%c[pda_white]- %c[ui_gray_2]Weather tightens visibility (best only, subtracted from time-of-day base): %c[pda_yellow]rain -10 m%c[ui_gray_2], %c[pda_yellow]storm -15 m%c[ui_gray_2], %c[pda_yellow]fog -20 m%c[ui_gray_2]. Minimum %c[pda_yellow]10 m%c[ui_gray_2].\n
+			%c[pda_white]- %c[ui_gray_2]Examples: night rain %c[pda_yellow]20 m%c[ui_gray_2]; night fog %c[pda_yellow]10 m%c[ui_gray_2]; day fog %c[pda_yellow]30 m%c[ui_gray_2].\n
+
+			\n%c[pda_green]GUIDE FEES\n
+			%c[pda_white]- %c[ui_gray_2]Per kilometre: Easy %c[pda_yellow]2000 RU%c[ui_gray_2], Medium %c[pda_yellow]2500 RU%c[ui_gray_2], Hard %c[pda_yellow]3000 RU%c[ui_gray_2]. Ignores weight limits and ambushes.\n
 
 			\n%c[pda_green]SETTINGS\n
-			%c[pda_white]- %c[ui_gray_1]Tune options in %c[pda_yellow]MCM > Dorn's Fast Travel%c[ui_gray_1]: fastest PDA map speed, ambush dodge base, guide fees, and more.\n
+			%c[pda_white]- %c[pda_yellow]MCM > Dorn's Fast Travel%c[ui_gray_2]: top travel speed when lightly loaded, and how long PDA messages stay on screen.\n
 
 			\n%c[pda_white]Good hunting, stalker!
 		</text>
