@@ -9,29 +9,11 @@
 		<text>Development</text>
 	</string>
 
-	<string id="ui_mcm_dorn_fast_travel_enabled">
-		<text>Enable Mod</text>
-	</string>
-	<string id="ui_mcm_dorn_fast_travel_enabled_desc">
-		<text>Enable or disable animated PDA travel.</text>
-	</string>
 	<string id="ui_mcm_dorn_fast_travel_travel_speed">
-		<text>Travel Speed</text>
+		<text>Fastest PDA Map Speed</text>
 	</string>
 	<string id="ui_mcm_dorn_fast_travel_travel_speed_desc">
-		<text>How quickly the journey bar advances on the PDA map (m/s virtual). Default 50; range 25-100.</text>
-	</string>
-	<string id="ui_mcm_dorn_fast_travel_time_factor">
-		<text>Time Factor</text>
-	</string>
-	<string id="ui_mcm_dorn_fast_travel_time_factor_desc">
-		<text>Multiplier for real-time journey speed. Default 1 (hardest); higher values finish the PDA bar faster.</text>
-	</string>
-	<string id="ui_mcm_dorn_fast_travel_resource_cost_mult">
-		<text>Survival Cost Multiplier</text>
-	</string>
-	<string id="ui_mcm_dorn_fast_travel_resource_cost_mult_desc">
-		<text>Scales hunger, thirst, and sleep drain from travel time. Minimum 1 (cannot make travel easier than default).</text>
+		<text>Maximum PDA map travel speed (m/s virtual) for normal travel at normal weight. Default 50. Sneak and encumbrance slow this further, lengthening the map bar and journey time (and survival cost). Lower values slow all travel proportionally.</text>
 	</string>
 	<string id="ui_mcm_dorn_fast_travel_message_duration">
 		<text>Message Duration</text>
@@ -39,89 +21,14 @@
 	<string id="ui_mcm_dorn_fast_travel_message_duration_desc">
 		<text>How long on-screen travel messages stay visible (seconds).</text>
 	</string>
-	<string id="ui_mcm_dorn_fast_travel_arrival_offset">
-		<text>Arrival Offset</text>
-	</string>
-	<string id="ui_mcm_dorn_fast_travel_arrival_offset_desc">
-		<text>Meters before your destination to spawn instead of on top of it (0-30, default 10).</text>
-	</string>
-	<string id="ui_mcm_dorn_fast_travel_encounter_offset">
-		<text>Ambush Spawn Offset</text>
-	</string>
-	<string id="ui_mcm_dorn_fast_travel_encounter_offset_desc">
-		<text>Meters to pull back along your path when an ambush interrupts travel. Default 30; lower is harsher.</text>
-	</string>
-	<string id="ui_mcm_dorn_fast_travel_map_dots_per_km">
-		<text>Path Markers per km</text>
-	</string>
-	<string id="ui_mcm_dorn_fast_travel_map_dots_per_km_desc">
-		<text>Markers placed along the route (3-30 per km of distance, clamped to 3-30 total). Used for testing density; actual count scales with trip length.</text>
+	<string id="ui_mcm_dorn_fast_travel_ambush_detection_desc">
+		<text>Ambush scan radius (not dodge chance): 50 m day base, minus 10 m dawn/dusk, minus 20 m night, minus weather (rain 10 m, storm 15 m, foggy 20 m — stacks). Travel-block radius stays 50 m. On ambush: pull back by scan radius (×2 sneaking, max 60 m). Hostiles alerted 1 s after spawn; you are invulnerable until then. Clear arrival: 5 m before destination when clear.</text>
 	</string>
 	<string id="ui_mcm_dorn_fast_travel_stealth_dodge_base">
-		<text>Base Sneak Chance (Scouting Lv 1)</text>
+		<text>Base Ambush Dodge Chance (Scouting Lv 1)</text>
 	</string>
 	<string id="ui_mcm_dorn_fast_travel_stealth_dodge_base_desc">
-		<text>Starting ambush dodge chance before Scouting levels and conditions. Default 20%; can only be lowered.</text>
-	</string>
-	<string id="ui_mcm_dorn_fast_travel_night_sneak_bonus">
-		<text>Night Sneak Bonus</text>
-	</string>
-	<string id="ui_mcm_dorn_fast_travel_night_sneak_bonus_desc">
-		<text>Flat bonus percent at night (21:00-05:00). Default 20%; can only be lowered.</text>
-	</string>
-	<string id="ui_mcm_dorn_fast_travel_rain_sneak_bonus">
-		<text>Rain Sneak Bonus</text>
-	</string>
-	<string id="ui_mcm_dorn_fast_travel_rain_sneak_bonus_desc">
-		<text>Flat bonus percent while it is raining. Default 10%; can only be lowered.</text>
-	</string>
-	<string id="ui_mcm_dorn_fast_travel_map_dots">
-		<text>Path Markers</text>
-	</string>
-	<string id="ui_mcm_dorn_fast_travel_map_dots_desc">
-		<text>Deprecated - use Path Markers per km.</text>
-	</string>
-	<string id="ui_mcm_dorn_fast_travel_path_marker_icon">
-		<text>Path Marker Icon</text>
-	</string>
-	<string id="ui_mcm_dorn_fast_travel_path_marker_icon_desc">
-		<text>Map spot icon for path markers. Not all options are implemented yet.</text>
-	</string>
-	<string id="ui_mcm_lst_green_location">
-		<text>Green dot</text>
-	</string>
-	<string id="ui_mcm_lst_level_changer">
-		<text>Zone exit arrow</text>
-	</string>
-	<string id="ui_mcm_lst_primary_object">
-		<text>White circle</text>
-	</string>
-	<string id="ui_mcm_lst_artefact_location">
-		<text>Artefact marker</text>
-	</string>
-	<string id="ui_mcm_dorn_fast_travel_path_draw_mode">
-		<text>Path Draw Mode</text>
-	</string>
-	<string id="ui_mcm_dorn_fast_travel_path_draw_mode_desc">
-		<text>How the travel route is drawn on the PDA. Only dots is implemented; other modes are reserved.</text>
-	</string>
-	<string id="ui_mcm_lst_dots">
-		<text>Dots</text>
-	</string>
-	<string id="ui_mcm_lst_line">
-		<text>Line (planned)</text>
-	</string>
-	<string id="ui_mcm_lst_walking_icon">
-		<text>Walking icon (planned)</text>
-	</string>
-	<string id="ui_mcm_lst_none">
-		<text>None (planned)</text>
-	</string>
-	<string id="ui_mcm_dorn_fast_travel_enable_guide_travel">
-		<text>Enable Guided Instant Travel</text>
-	</string>
-	<string id="ui_mcm_dorn_fast_travel_enable_guide_travel_desc">
-		<text>Instant teleport to any valid map destination (including cross-zone). Ruble cost only - no journey, ambush, or hunger/thirst/sleep drain.</text>
+		<text>Chance to avoid an ambush before Scouting bonuses. Sneak mode doubles this. Time of day and weather do not change dodge chance. Default 20%; can only be lowered.</text>
 	</string>
 	<string id="ui_mcm_dorn_fast_travel_guide_cost_per_km">
 		<text>Guide Cost per km</text>
@@ -141,6 +48,12 @@
 	<string id="ui_mcm_dorn_fast_travel_debug_log_desc">
 		<text>Write detailed travel debug lines to xray_khada.log via printf. Errors always log regardless of this setting.</text>
 	</string>
+	<string id="ui_mcm_dorn_fast_travel_path_preview">
+		<text>Path Preview on Menu Open</text>
+	</string>
+	<string id="ui_mcm_dorn_fast_travel_path_preview_desc">
+		<text>When enabled, right-clicking a travel destination draws grey path dots on the PDA before you start a journey. Off by default.</text>
+	</string>
 	<string id="ui_mcm_dorn_fast_travel_scouting_level_up">
 		<text>Scouting Level Up</text>
 	</string>
@@ -159,6 +72,9 @@
 	</string>
 	<string id="dft_menu_sneaky_travel">
 		<text>Sneak here</text>
+	</string>
+	<string id="dft_menu_cancel_travel">
+		<text>Cancel journey</text>
 	</string>
 	<string id="dft_msg_hostiles_nearby">
 		<text>Hostiles are too close - deal with them before traveling.</text>

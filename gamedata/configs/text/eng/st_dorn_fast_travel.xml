@@ -1,101 +1,110 @@
 <string_table>
-	<string id="tlra_msg_too_wounded">
+	<string id="dft_msg_too_wounded">
 		<text>You are too wounded to begin this journey.</text>
 	</string>
-	<string id="tlra_msg_must_stop_bleeding">
+	<string id="dft_msg_must_stop_bleeding">
 		<text>You must stop the bleeding before traveling.</text>
 	</string>
-	<string id="tlra_msg_too_close">
+	<string id="dft_msg_too_close">
 		<text>Destination is too close.</text>
 	</string>
-	<string id="tlra_msg_heading_border">
+	<string id="dft_msg_heading_border">
 		<text>Heading to zone exit...</text>
 	</string>
-	<string id="tlra_msg_journey_begins">
+	<string id="dft_msg_journey_begins">
 		<text>The journey begins...</text>
 	</string>
-	<string id="tlra_msg_cannot_afford">
+	<string id="dft_msg_cannot_afford">
 		<text>You cannot afford the guide fee (%s RU).</text>
 	</string>
-	<string id="tlra_msg_resuming">
+	<string id="dft_msg_cannot_travel_here">
+		<text>Cannot fast travel here.</text>
+	</string>
+	<string id="dft_msg_resuming">
 		<text>Resuming journey...</text>
 	</string>
-	<string id="tlra_msg_ru_refunded">
+	<string id="dft_msg_ru_refunded">
 		<text>, %d RU refunded</text>
 	</string>
-	<string id="tlra_msg_aborted">
+	<string id="dft_msg_aborted">
 		<text>Journey aborted at %d%%.%s</text>
 	</string>
-	<string id="tlra_msg_interrupted">
+	<string id="dft_msg_cancelled">
+		<text>Journey cancelled.</text>
+	</string>
+	<string id="dft_msg_combat_cancelled">
+		<text>Combat detected — journey cancelled.</text>
+	</string>
+	<string id="dft_msg_interrupted">
 		<text>Journey interrupted at %d%%.%s</text>
 	</string>
-	<string id="tlra_msg_dest_reached_stats">
-		<text>Destination reached. Distance: %dm. Time elapsed: %dh %dm.</text>
+	<string id="dft_msg_dest_reached_stats">
+		<text>Destination reached. Distance: %dm. Time elapsed: %s.</text>
 	</string>
-	<string id="tlra_msg_events_summary">
+	<string id="dft_msg_events_summary">
 		<text>\nEvents: Survived %d ambushes, found %d positive events.</text>
 	</string>
-	<string id="tlra_menu_hire_guide">
+	<string id="dft_menu_hire_guide">
 		<text>Hire guide (instant)</text>
 	</string>
-	<string id="tlra_menu_free">
+	<string id="dft_menu_free">
 		<text>Free</text>
 	</string>
-	<string id="tlra_stealth_dodged">
+	<string id="dft_stealth_dodged">
 		<text>Stealth Success: You slipped past a threat (%d%% chance).</text>
 	</string>
-	<string id="tlra_road_thick_brush">
+	<string id="dft_road_thick_brush">
 		<text>You push forward through the thick brush...</text>
 	</string>
-	<string id="tlra_road_dead_trees">
+	<string id="dft_road_dead_trees">
 		<text>The wind howls through the dead trees...</text>
 	</string>
-	<string id="tlra_road_muddy_ground">
+	<string id="dft_road_muddy_ground">
 		<text>The ground is uneven and muddy here...</text>
 	</string>
-	<string id="tlra_road_heavy_zone">
+	<string id="dft_road_heavy_zone">
 		<text>The zone feels particularly heavy today...</text>
 	</string>
-	<string id="tlra_road_crows">
+	<string id="dft_road_crows">
 		<text>You spot a group of crows circling overhead...</text>
 	</string>
-	<string id="tlra_road_mutant_howl">
+	<string id="dft_road_mutant_howl">
 		<text>Distant mutants howl in the distance...</text>
 	</string>
-	<string id="tlra_road_wipe_sweat">
+	<string id="dft_road_wipe_sweat">
 		<text>You wipe sweat from your brow, keeping your eyes on the horizon...</text>
 	</string>
-	<string id="tlra_road_rustle_grass">
+	<string id="dft_road_rustle_grass">
 		<text>A rustle in the grass makes you tighten your grip on your weapon...</text>
 	</string>
-	<string id="tlra_road_desolate_beauty">
+	<string id="dft_road_desolate_beauty">
 		<text>You pause for a second, admiring the desolate beauty of the Zone...</text>
 	</string>
-	<string id="tlra_road_anomaly_hum">
+	<string id="dft_road_anomaly_hum">
 		<text>The distant hum of an anomaly field keeps you on edge...</text>
 	</string>
-	<string id="tlra_pos_peace">
+	<string id="dft_pos_peace">
 		<text>You find a moment of peace, catching your breath...</text>
 	</string>
-	<string id="tlra_pos_meditative">
+	<string id="dft_pos_meditative">
 		<text>The rhythmic sound of your footsteps is almost meditative...</text>
 	</string>
-	<string id="tlra_pos_ru_stash">
+	<string id="dft_pos_ru_stash">
 		<text>You find a small, forgotten stash of 150 RU in a hollow log.</text>
 	</string>
-	<string id="tlra_pos_sun_breaks">
+	<string id="dft_pos_sun_breaks">
 		<text>The sun breaks through the clouds, raising your spirits.</text>
 	</string>
-	<string id="tlra_pos_med_stash">
+	<string id="dft_pos_med_stash">
 		<text>You find a medical stash tucked into a crevice.</text>
 	</string>
-	<string id="tlra_pos_ammo_crate">
+	<string id="dft_pos_ammo_crate">
 		<text>You spot an abandoned ammunition crate in the ruins.</text>
 	</string>
-	<string id="tlra_pos_artifact">
+	<string id="dft_pos_artifact">
 		<text>You discover a faint shimmer in a patch of grass... an artifact!</text>
 	</string>
-	<string id="tlra_pos_ridge_view">
+	<string id="dft_pos_ridge_view">
 		<text>The view from this ridge is breathtaking. You take a moment to soak it in.</text>
 	</string>
 </string_table>

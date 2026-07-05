@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="windows-1251"?>
+<string_table>
+
+	<!-- Optional: if Fair Fast Travel is still installed, redirect its guide entry to ours -->
+	<string id="encyclopedia_addons_fair_fast_travel">
+		<text>Fair Fast Travel</text>
+	</string>
+
+	<string id="encyclopedia_addons_fair_fast_travel_text">
+		<text>%c[ui_gray_1]Fair Fast Travel is disabled when using %c[pda_yellow]Dorn's Fast Travel%c[ui_gray_1] (see guide).\n
+			\n%c[pda_white]Open %c[pda_yellow]PDA Guide > Addons > Dorn's Fast Travel%c[pda_white] for how animated PDA travel works in this modpack.
+		</text>
+	</string>
+
+	<!-- Dorn's Fast Travel guide -->
+	<string id="encyclopedia_addons_dorn_fast_travel">
+		<text>Dorn's Fast Travel: Addon Overview</text>
+	</string>
+
+	<string id="encyclopedia_addons_dorn_fast_travel_text">
+		<text>%c[ui_gray_1]
+			\n%c[pda_yellow]Dorn's Fast Travel%c[ui_gray_1] replaces instant map teleport with an animated journey inside the current zone. Right-click a destination on your PDA map to see travel options.\n
+
+			\n%c[pda_green]GETTING AROUND\n
+			%c[pda_white]- %c[ui_gray_1]%c[pda_yellow]Travel here%c[ui_gray_1]: normal pace on the PDA route bar. No ruble fare.\n
+			%c[pda_white]- %c[ui_gray_1]%c[pda_yellow]Sneak here%c[ui_gray_1]: about 1/3 map speed (3x longer), better ambush dodge chance, and a longer ambush pull-back.\n
+			%c[pda_white]- %c[ui_gray_1]Same-zone only for animated travel. Cross-zone trips need a %c[pda_yellow]zone exit%c[ui_gray_1] or %c[pda_yellow]Hire guide (instant)%c[ui_gray_1] on the map (rubles, no journey or survival drain).\n
+
+			\n%c[pda_green]PDA MAP SPEED AND TIME\n
+			%c[pda_white]- %c[ui_gray_1]Journey time follows PDA map speed, not a separate timer. Default fastest pace is 50 (about 1 game hour per km at normal weight).\n
+			%c[pda_white]- %c[ui_gray_1]%c[pda_yellow]Encumbrance%c[ui_gray_1] slows the bar: yellow near-max weight (-25%), red overweight (speed divided by carry ratio).\n
+			%c[pda_white]- %c[ui_gray_1]Game time does not tick while the PDA bar moves. It jumps once at arrival (or partially on ambush). Hunger, thirst, and sleep follow that jump only — sneak costs more because the jump is longer.\n
+			%c[pda_white]- %c[ui_gray_1]Cancel journey: no time jump, no survival cost. You return to where you started.\n
+
+			\n%c[pda_green]AMBUSHES\n
+			%c[pda_white]- %c[ui_gray_1]Travel is blocked if hostiles are within 50 m (horizontal, 10 m vertical).\n
+			%c[pda_white]- %c[ui_gray_1]During a trip, ambush %c[pda_yellow]scan radius%c[ui_gray_1]: 50 m day base, minus 10 m dawn/dusk, minus 20 m night, minus weather (rain 10 m, storm 15 m, foggy 20 m — stacks; not dodge chance).\n
+			%c[pda_white]- %c[ui_gray_1]%c[pda_yellow]Dodge chance%c[ui_gray_1]: base value plus Scouting skill; Sneak mode doubles it. Weather does not change dodge chance.\n
+			%c[pda_white]- %c[ui_gray_1]If an ambush triggers, you are pulled back by scan radius (×2 sneaking, max 60 m). Normal-travel ambushes cut stamina to half. Hostiles are alerted 1 s after you arrive; you are invulnerable until then.\n
+			%c[pda_white]- %c[ui_gray_1]Clear arrivals spawn 5 m before the destination.\n
+
+			\n%c[pda_green]PDA ROUTE LINE\n
+			%c[pda_white]- %c[ui_gray_1]A dot path is drawn when travel starts (grey ahead, green behind). Dots every 20 m along the engine route.\n
+			%c[pda_white]- %c[ui_gray_1]Right-click anywhere on the PDA map during travel and choose Cancel journey (Back/Esc also works).\n
+
+			\n%c[pda_green]SETTINGS\n
+			%c[pda_white]- %c[ui_gray_1]Tune options in %c[pda_yellow]MCM > Dorn's Fast Travel%c[ui_gray_1]: fastest PDA map speed, ambush dodge base, guide fees, and more.\n
+
+			\n%c[pda_white]Good hunting, stalker!
+		</text>
+	</string>
+
+</string_table>

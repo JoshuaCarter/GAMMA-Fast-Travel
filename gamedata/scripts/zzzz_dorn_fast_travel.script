@@ -1,13 +1,4 @@
--- ============================================================
--- DORN'S FAST TRAVEL
--- Fork of The Long Road Ahead v2.2.0 by damage_zedd
--- Continuous Zone-to-Zone Travel for Anomaly/GAMMA
--- ============================================================
-
--- ============================================================
--- Consolidated State Management
--- ============================================================
-local tlra = {
+local dft = {
     is_traveling        = false,
     player_ready        = true,
     start_pos           = nil,
@@ -26,51 +17,68 @@ local tlra = {
     is_transition       = false,
     start_game_time     = nil,
     last_encounter_check = 0,
-    last_event_msg      = 0,
-    last_positive_event = 0,
     journey_cost        = 0,
     dynamic_map         = {}, -- [src_lvl][dst_lvl] = true
     door_registry       = {}, -- [src_lvl][dst_lvl] = {ids}
     level_names         = {}, -- [lid] = name
+    level_ids_by_name   = {}, -- [name] = lid
+    level_offsets       = {}, -- [lid] = {x,y,z} global PDA map offset
+    level_registry_built = false,
     dot_positions       = {},
     dot_ids             = {},
+    dot_path_ratio      = {},
+    dot_done            = {},
+    path_preview_id     = nil,
+    is_path_preview     = false,
+    menu_open_seq       = 0,
+    last_map_click_pos  = nil,
+    last_menu_target_id = nil,
+    lc_spot_ids         = nil,
+    right_click_avail   = false,
     active_config       = {},
     travel_mode         = "normal",
     encounters_avoided  = 0,
     arrival_forced_ambushes = 0,
     ambush_targets      = nil,  -- { squads={}, npcs={} } when ambush confirmed
+    graph_cache         = nil,  -- [{gvid, lvid, pos}] on current level
+    graph_lvid_map      = nil,  -- [lvid] = gvid
+    graph_cache_level   = nil,
+    graph_cache_name    = nil,
     encumbrance_time_mult = 1.0,
 }
-
--- Global exposure for external patches
-_G.tlra = tlra
 
 local MOD_ID = "dorn_fast_travel"
 local DORN_COMMON_VERSION = "dorn_common_7367f5e7" -- managed by sync-dorn-common.sh
 local DORN
 local CONFIG = {}
 local refresh_active_config
-local tlra_msg
+local dft_msg
 
 local INVALID_LVID = 4294967295
 local INVALID_GVID = 65535
+local TRAVEL_MAX_ALIFE_GRAPH_DRIFT = 100
+local TRAVEL_MAX_CLICK_DRIFT = 150
 
-local MCM_KEY_SECTION = {
-    debug_overlay       = "development",
-    debug_log           = "development",
-    scouting_level_up   = "development",
-    scouting_level_down = "development",
+local MCM_SECTION_DEV = "development"
+
+local MCM_DEV_KEYS = {
+    debug_overlay       = true,
+    debug_log           = true,
+    path_preview        = true,
+    scouting_level_up   = true,
+    scouting_level_down = true,
 }
 
--- ============================================================
--- Dot state
--- ============================================================
-local TLRA_DOT_COUNT     = 6
+local TRAVEL = {
+    sneak_cap            = 95,
+    min_per_km           = 10,
+    sneak_min_per_km     = 30,
+    resource_rate_per_hr = 0.10,
+    encounter_offset     = 30,  -- default ambush spawn pullback (m); scouting adds on top
+}
 
-local SNEAK_CAP              = 95
-local TRAVEL_MIN_PER_KM      = 10
-local SNEAK_MIN_PER_KM       = 30
-local RESOURCE_RATE_PER_HR   = 0.10
+-- TEMP: post-travel weapon draw / show_weapon / hide_state. Set true to restore old behavior.
+local DFT_WEAPON_RESTORE = false
 
 local CONFIG_FLOOR = {
     resource_cost_mult  = 1,
@@ -84,50 +92,77 @@ local CONFIG_CEILING = {
     night_sneak_bonus   = 20,
     rain_sneak_bonus    = 10,
     travel_speed        = 100,
-    encounter_offset    = 30,
 }
 
-local HOSTILE_RADIUS_M = 50  -- travel block, arrival reroute (fixed)
-local HOSTILE_VERTICAL_M = 10  -- max |dy| for hostile / ambush proximity
-local AMBUSH_RADIUS_BASE = 50
-local AMBUSH_RADIUS_DUSK = 40      -- -10
-local AMBUSH_RADIUS_NIGHT = 30     -- -20
-local AMBUSH_RADIUS_NIGHT_RAIN = 20 -- -30 (night + rain)
-local AMBUSH_DAWN_START = 5
-local AMBUSH_DAWN_END = 7
-local AMBUSH_DUSK_START = 19
-local AMBUSH_DUSK_END = 21
+local HOSTILE = {
+    radius_m   = 50,  -- travel block, arrival reroute (fixed)
+    vertical_m = 10,  -- max |dy| for hostile / ambush proximity
+}
 
-local ARRIVAL_REROUTE_MAX      = 10
-local MAP_DOTS_MIN             = 3
-local MAP_DOTS_MAX             = 30
+local AMBUSH = {
+    radius_base        = 50,
+    radius_dusk        = 40,       -- -10
+    radius_night       = 30,       -- -20
+    radius_night_rain  = 20,       -- -30 (night + rain)
+    dawn_start         = 5,
+    dawn_end           = 7,
+    dusk_start         = 19,
+    dusk_end           = 21,
+}
 
--- ============================================================
--- Persistence keys
--- ============================================================
-local KEY_TRAVELING  = "tlra_jt"
-local KEY_DEST_X     = "tlra_dx"
-local KEY_DEST_Y     = "tlra_dy"
-local KEY_DEST_Z     = "tlra_dz"
-local KEY_DEST_RAW_X = "tlra_drx"
-local KEY_DEST_RAW_Y = "tlra_dry"
-local KEY_DEST_RAW_Z = "tlra_drz"
-local KEY_DEST_LVID  = "tlra_dl"
-local KEY_DEST_GVID  = "tlra_dg"
-local KEY_FINAL_GVID = "tlra_fg"
-local KEY_FINAL_X    = "tlra_fx"
-local KEY_FINAL_Y    = "tlra_fy"
-local KEY_FINAL_Z    = "tlra_fz"
-local KEY_FINAL_LVID = "tlra_fl"
-local KEY_COST       = "tlra_co"
-local KEY_DOT_COUNT  = "tlra_dc"
-local KEY_STATS_AMB  = "tlra_sa"
-local KEY_STATS_POS  = "tlra_sp"
-local KEY_SAVED_SLOT = "tlra_ss"
+local ARRIVAL = {
+    reroute_max = 10,
+}
 
--- ============================================================
--- Static Fallback Maps (v1.8.8 Hybrid System)
--- ============================================================
+local PATH = {
+    dot_spot              = "dft_path_dot",
+    dot_spot_pending      = "dft_path_dot_pending",
+    dot_spot_debug_vertex = "dft_path_debug_vertex",
+    dot_spot_debug_edge   = "dft_path_debug_edge",
+    dot_max_count         = 1000,
+    dot_spacing_m         = 20,  -- journey dots every 20m along generated path
+    step_m                = 20,  -- advance 20m along current->dest each path step
+    road_snap_m           = 19,  -- road graph node search radius around forward sample
+    max_step_jump_m       = 20,  -- max distance between consecutive path points (nav/raw only)
+    path_min_forward_m    = 2,   -- each step must advance toward destination
+    path_stall_steps      = 3,   -- safety: stop if stuck not closing on dest
+    path_dest_progress_m  = 1,
+    road_on_graph_max_m   = 5,   -- navmesh vertex counts as on-road within this of its graph point
+    max_path_steps        = 500,
+    preview_edge_spacing_m = 5,
+}
+
+PATH.dots = {
+    PATH.dot_spot, PATH.dot_spot_pending,
+    PATH.dot_spot_debug_vertex, PATH.dot_spot_debug_edge,
+}
+
+local SCOUTING = {
+    ambush_spawn_per_level = 1,  -- meters added to ambush spawn pullback per level
+}
+
+local SAVE = {
+    traveling  = "dft_jt",
+    dest_x     = "dft_dx",
+    dest_y     = "dft_dy",
+    dest_z     = "dft_dz",
+    dest_raw_x = "dft_drx",
+    dest_raw_y = "dft_dry",
+    dest_raw_z = "dft_drz",
+    dest_lvid  = "dft_dl",
+    dest_gvid  = "dft_dg",
+    final_gvid = "dft_fg",
+    final_x    = "dft_fx",
+    final_y    = "dft_fy",
+    final_z    = "dft_fz",
+    final_lvid = "dft_fl",
+    cost       = "dft_co",
+    dot_count  = "dft_dc",
+    stats_amb  = "dft_sa",
+    stats_pos  = "dft_sp",
+    saved_slot = "dft_ss",
+}
+
 local STATIC_ZONE_MAP = {
     l01_escape          = {"l02_garbage", "k00_marsh", "k01_darkscape", "meadow"},
     k00_marsh           = {"l01_escape", "l03_agroprom"},
@@ -182,12 +217,6 @@ local DOOR_KEYWORDS = {
     l11_hospital        = {"hospital", "hos"},
 }
 
-tlra.STATIC_ZONE_MAP = STATIC_ZONE_MAP
-tlra.DOOR_KEYWORDS = DOOR_KEYWORDS
-
--- ============================================================
--- 0. Helpers
--- ============================================================
 local function dft_format_msg(fmt, ...)
     local arg = {...}
     if #arg == 0 then return tostring(fmt) end
@@ -200,12 +229,23 @@ local function dft_log(fmt, ...)
     printf("[DFT] " .. dft_format_msg(fmt, ...))
 end
 
+local function dft_path_road_log_enabled()
+    if CONFIG.debug_log then return true end
+    if CONFIG.path_preview and dft.is_path_preview then return true end
+    return false
+end
+
+local function dft_path_road_log(fmt, ...)
+    if not dft_path_road_log_enabled() then return end
+    printf("[DFT path-road] " .. dft_format_msg(fmt, ...))
+end
+
 local function dft_log_error(fmt, ...)
     printf("[DFT ERROR] " .. dft_format_msg(fmt, ...))
 end
 
 -- Used by PDA menu, guide travel, and messages — must be defined before those callers.
-local function tlra_str(id)
+local function dft_str(id)
     local s = game.translate_string(id)
     if s and s ~= "" and s ~= id then return s end
     return id
@@ -219,6 +259,25 @@ local function destination_on_other_level(obj)
     local ok_d, dest_lid = pcall(function() return gg:vertex(obj.m_game_vertex_id):level_id() end)
     return ok_a and ok_d and actor_lid ~= dest_lid
 end
+
+-- True when object's game-graph level matches the actor's loaded level (not PDA tab name).
+local function dft_object_on_loaded_level(se_obj)
+    if not (se_obj and db.actor and game_graph) then return true end
+    local gg = game_graph()
+    local obj_gvid = se_obj.m_game_vertex_id
+    if not (obj_gvid and gg.valid_vertex_id and gg:valid_vertex_id(obj_gvid)) then
+        return not destination_on_other_level(se_obj)
+    end
+    local ok_a, actor_lid = pcall(function() return gg:vertex(db.actor:game_vertex_id()):level_id() end)
+    local ok_o, obj_lid = pcall(function() return gg:vertex(obj_gvid):level_id() end)
+    return ok_a and ok_o and actor_lid == obj_lid
+end
+
+local dft_ensure_level_graph_cache
+local dft_graph_nearest_gvid
+local dft_graph_gvid_from_lvid
+local dft_clear_path_preview
+local dft_build_path_preview
 
 local function dft_is_cross_zone_destination(se_obj, ln)
     local cur_lvl = (level and level.name) and level.name() or nil
@@ -239,22 +298,16 @@ local function dft_dbg_clear()
     end
 end
 
-local function tlra_log(fmt, ...)
-    dft_log(fmt, ...)
-end
-
-
-
 local function safe_create_item(section, fallback)
     if not db or not db.actor then return end
     local ini = system_ini()
     if section and ini:section_exist(section) then
         alife_create_item(section, db.actor)
     elseif fallback and ini:section_exist(fallback) then
-        tlra_log("SAFE CREATE: Section %s missing, falling back to %s", tostring(section), tostring(fallback))
+        dft_log("SAFE CREATE: Section %s missing, falling back to %s", tostring(section), tostring(fallback))
         alife_create_item(fallback, db.actor)
     else
-        tlra_log("SAFE CREATE ERROR: Section %s and fallback missing!", tostring(section))
+        dft_log("SAFE CREATE ERROR: Section %s and fallback missing!", tostring(section))
     end
 end
 
@@ -270,22 +323,25 @@ local function is_trader_restrictor(name)
 end
 
 local function build_level_names_registry()
-    if tlra.level_names and next(tlra.level_names) ~= nil then
+    if dft.level_registry_built then
         return
     end
 
+    dft.level_names = {}
+    dft.level_ids_by_name = {}
+    dft.level_offsets = {}
     local game_ini = system_ini()
     if not (game_ini and game_ini:section_exist("levels")) then
         game_ini = ini_file("game.ltx")
     end
     if not (game_ini and game_ini:section_exist("levels")) then
-        tlra_log("ERROR: levels section not found in system_ini or game.ltx")
+        dft_log("ERROR: levels section not found in system_ini or game.ltx")
         return
     end
 
     local ok_count, line_count = pcall(function() return game_ini:line_count("levels") end)
     if not (ok_count and line_count and line_count > 0) then
-        tlra_log("ERROR: line_count on levels failed or empty")
+        dft_log("ERROR: line_count on levels failed or empty")
         return
     end
 
@@ -340,19 +396,32 @@ local function build_level_names_registry()
                     ["zaton"] = "zaton",
                 }
                 if canonical[name] then name = canonical[name] end
-                tlra.level_names[id] = name
-                tlra_log("Authoritative Level ID Registry: [%d] = %s", id, name)
+                dft.level_names[id] = name
+                dft.level_ids_by_name[name] = id
+                if game_ini:line_exist(section, "offset") then
+                    local off_str = game_ini:r_string(section, "offset")
+                    local ox, oy, oz = off_str:match("([%d%.%-]+)%s*,%s*([%d%.%-]+)%s*,%s*([%d%.%-]+)")
+                    if ox then
+                        dft.level_offsets[id] = {
+                            x = tonumber(ox) or 0,
+                            y = tonumber(oy) or 0,
+                            z = tonumber(oz) or 0,
+                        }
+                    end
+                end
+                dft_log("Authoritative Level ID Registry: [%d] = %s", id, name)
             end
         end
     end
+    dft.level_registry_built = true
 end
 
 local function resolve_level_name(level_id)
     if not level_id then return nil end
-    if next(tlra.level_names) == nil then
+    if next(dft.level_names) == nil then
         build_level_names_registry()
     end
-    if tlra.level_names[level_id] then return tlra.level_names[level_id] end
+    if dft.level_names[level_id] then return dft.level_names[level_id] end
 
     local name = nil
 
@@ -434,25 +503,26 @@ local function resolve_level_name(level_id)
         if canonical[name] then name = canonical[name] end
     end
 
-    tlra.level_names[level_id] = name
+    dft.level_names[level_id] = name
     return name
 end
 
 local function build_dynamic_map()
-    if tlra.dynamic_map and next(tlra.dynamic_map) then
-        tlra_log("Using cached Dynamic Zone Map.")
+    if dft.dynamic_map and next(dft.dynamic_map) then
+        dft_log("Using cached Dynamic Zone Map.")
         return
     end
-    tlra_log("Building Dynamic Zone Map (GAMMA-aware)...")
+    dft_log("Building Dynamic Zone Map (GAMMA-aware)...")
     local sim = alife()
     local gg = game_graph()
     if not (sim and gg) then
-        tlra_log("ERROR: alife() or game_graph() not ready")
+        dft_log("ERROR: alife() or game_graph() not ready")
         return
     end
 
-    tlra.dynamic_map = {}
-    tlra.door_registry = {}
+    dft.dynamic_map = {}
+    dft.door_registry = {}
+    dft.lc_spot_ids = nil
     local total = 0
 
     for i = 1, 65534 do
@@ -475,16 +545,16 @@ local function build_dynamic_map()
 
                             if dst_name and src_name ~= dst_name then
                                 -- Build adjacency
-                                tlra.dynamic_map[src_name] = tlra.dynamic_map[src_name] or {}
-                                tlra.dynamic_map[src_name][dst_name] = true
+                                dft.dynamic_map[src_name] = dft.dynamic_map[src_name] or {}
+                                dft.dynamic_map[src_name][dst_name] = true
 
                                 -- Register door
-                                tlra.door_registry[src_name] = tlra.door_registry[src_name] or {}
-                                tlra.door_registry[src_name][dst_name] = tlra.door_registry[src_name][dst_name] or {}
-                                table.insert(tlra.door_registry[src_name][dst_name], obj.id)
+                                dft.door_registry[src_name] = dft.door_registry[src_name] or {}
+                                dft.door_registry[src_name][dst_name] = dft.door_registry[src_name][dst_name] or {}
+                                table.insert(dft.door_registry[src_name][dst_name], obj.id)
 
                                 total = total + 1
-                                tlra_log("  Discovered transition: %s -> %s (id: %d)", src_name, dst_name, obj.id)
+                                dft_log("  Discovered transition: %s -> %s (id: %d)", src_name, dst_name, obj.id)
                             end
                         end
                     end
@@ -502,7 +572,7 @@ local function build_dynamic_map()
                 if is_trader_restrictor(obj_name) then
                     -- Skip any trader-related restrictors (prevents false matches like trader containing "radar" or "rad")
                 elseif is_lc then
-                    tlra_log("  Evaluating Restrictor: %s (marker: %s, logic: %s)", obj:name(), tostring(has_marker), tostring(is_lc))
+                    dft_log("  Evaluating Restrictor: %s (marker: %s, logic: %s)", obj:name(), tostring(has_marker), tostring(is_lc))
 
                     local src_name, dst_name
                     local ok_src, src_lid = pcall(function() return gg:vertex(obj.m_game_vertex_id):level_id() end)
@@ -539,15 +609,15 @@ local function build_dynamic_map()
                     end
 
                     if src_name and dst_name and src_name ~= dst_name then
-                        tlra.dynamic_map[src_name] = tlra.dynamic_map[src_name] or {}
-                        tlra.dynamic_map[src_name][dst_name] = true
-                        tlra.door_registry[src_name] = tlra.door_registry[src_name] or {}
-                        tlra.door_registry[src_name][dst_name] = tlra.door_registry[src_name][dst_name] or {}
-                        table.insert(tlra.door_registry[src_name][dst_name], 1, obj.id)
+                        dft.dynamic_map[src_name] = dft.dynamic_map[src_name] or {}
+                        dft.dynamic_map[src_name][dst_name] = true
+                        dft.door_registry[src_name] = dft.door_registry[src_name] or {}
+                        dft.door_registry[src_name][dst_name] = dft.door_registry[src_name][dst_name] or {}
+                        table.insert(dft.door_registry[src_name][dst_name], 1, obj.id)
                         total = total + 1
-                        tlra_log("  Discovered Unified Restrictor: %s -> %s (id: %d)", src_name, dst_name, obj.id)
+                        dft_log("  Discovered Unified Restrictor: %s -> %s (id: %d)", src_name, dst_name, obj.id)
                     else
-                        tlra_log("  Restrictor Rejected: src=%s, dst=%s", tostring(src_name), tostring(dst_name))
+                        dft_log("  Restrictor Rejected: src=%s, dst=%s", tostring(src_name), tostring(dst_name))
                     end
                 end
 
@@ -572,13 +642,13 @@ local function build_dynamic_map()
                     end
 
                     if src_name and dst_name and src_name ~= dst_name then
-                        tlra.dynamic_map[src_name] = tlra.dynamic_map[src_name] or {}
-                        tlra.dynamic_map[src_name][dst_name] = true
-                        tlra.door_registry[src_name] = tlra.door_registry[src_name] or {}
-                        tlra.door_registry[src_name][dst_name] = tlra.door_registry[src_name][dst_name] or {}
-                        table.insert(tlra.door_registry[src_name][dst_name], obj.id)
+                        dft.dynamic_map[src_name] = dft.dynamic_map[src_name] or {}
+                        dft.dynamic_map[src_name][dst_name] = true
+                        dft.door_registry[src_name] = dft.door_registry[src_name] or {}
+                        dft.door_registry[src_name][dst_name] = dft.door_registry[src_name][dst_name] or {}
+                        table.insert(dft.door_registry[src_name][dst_name], obj.id)
                         total = total + 1
-                        tlra_log("  Discovered ELT transition: %s -> %s (id: %d, sec: %s)", src_name, dst_name, obj.id, sec)
+                        dft_log("  Discovered ELT transition: %s -> %s (id: %d, sec: %s)", src_name, dst_name, obj.id, sec)
                     end
                 end
             end
@@ -587,7 +657,7 @@ local function build_dynamic_map()
 
     -- Final pool sync (for any entries that don't have spawned objects yet)
     if _G.lc_extra_transitions and _G.lc_extra_transitions.lc_pool then
-        tlra_log("Integrating remaining lc_extra_transitions pool entries...")
+        dft_log("Integrating remaining lc_extra_transitions pool entries...")
         local pool = _G.lc_extra_transitions.lc_pool
         for sec, v in pairs(pool) do
             local src_name, dst_name
@@ -605,24 +675,24 @@ local function build_dynamic_map()
             end
 
             if src_name and dst_name and src_name ~= dst_name then
-                if not (tlra.dynamic_map[src_name] and tlra.dynamic_map[src_name][dst_name]) then
-                    tlra.dynamic_map[src_name] = tlra.dynamic_map[src_name] or {}
-                    tlra.dynamic_map[src_name][dst_name] = true
+                if not (dft.dynamic_map[src_name] and dft.dynamic_map[src_name][dst_name]) then
+                    dft.dynamic_map[src_name] = dft.dynamic_map[src_name] or {}
+                    dft.dynamic_map[src_name][dst_name] = true
                     total = total + 1
-                    tlra_log("  Added pool transition (no object yet): %s -> %s (%s)", src_name, dst_name, sec)
+                    dft_log("  Added pool transition (no object yet): %s -> %s (%s)", src_name, dst_name, sec)
                 end
             end
         end
     end
 
-    tlra_log("Dynamic Map Built: %d transitions discovered.", total)
+    dft_log("Dynamic Map Built: %d transitions discovered.", total)
 
     -- Debug: Print full discovered table
-    tlra_log("Discovered Connection Table:")
-    for src, dsts in pairs(tlra.dynamic_map) do
+    dft_log("Discovered Connection Table:")
+    for src, dsts in pairs(dft.dynamic_map) do
         local list = {}
         for dst,_ in pairs(dsts) do table.insert(list, dst) end
-        tlra_log("  [%s] -> %s", src, table.concat(list, ", "))
+        dft_log("  [%s] -> %s", src, table.concat(list, ", "))
     end
 end
 
@@ -630,7 +700,14 @@ end
 -- PDA destinations — spot detection, positions, menu
 -- ============================================================
 local DFT_SPOTS = {
-    level_changer = { "level_changer", "level_changer_up", "level_changer_down" },
+    -- Engine assigns one directional green-arrow spot per transition (8 horizontals + up/down).
+    level_changer = {
+        "level_changer",
+        "level_changer_up", "level_changer_up_right",
+        "level_changer_right", "level_changer_right_down",
+        "level_changer_down", "level_changer_down_left",
+        "level_changer_left", "level_changer_left_up",
+    },
     campfire      = { "campfire_lit", "campfire_unlit" },
 }
 
@@ -641,12 +718,154 @@ local function dft_map_has_any_spot(id, spot_names)
     return false
 end
 
+-- Green-arrow PDA transitions use engine map spots: level_changer / level_changer_up / level_changer_down.
+-- The clicked object id always owns the spot; transition dest lives on the alife object (dest_game_vertex_id
+-- on native level_changers, or sr_level_changer in spawn ini on restrictors).
+local function dft_get_level_changer_spot(id)
+    if not id then return nil end
+    for i = 1, #DFT_SPOTS.level_changer do
+        local spot = DFT_SPOTS.level_changer[i]
+        if level.map_has_object_spot(id, spot) ~= 0 then
+            return spot
+        end
+    end
+    return nil
+end
+
+local function dft_is_pda_transition(id)
+    return dft_get_level_changer_spot(id) ~= nil
+end
+
 local function dft_is_level_changer_spot(id)
-    return dft_map_has_any_spot(id, DFT_SPOTS.level_changer)
+    return dft_is_pda_transition(id)
+end
+
+local function dft_read_transition_dest_info(se_obj)
+    if not se_obj then return nil end
+    local info = {}
+    local cls = 0
+    pcall(function() cls = se_obj:clsid() end)
+
+    if cls == clsid.level_changer or (clsid.level_changer_s and cls == clsid.level_changer_s) then
+        pcall(function() info.dest_gvid = se_obj.dest_game_vertex_id or se_obj.m_dest_game_vertex_id end)
+        pcall(function() info.dest_lvid = se_obj.dest_level_vertex_id end)
+        pcall(function() info.dest_level = se_obj.dest_level_name end)
+        pcall(function()
+            if se_obj.dest_position and se_obj.dest_position.x then
+                info.dest_pos = se_obj.dest_position
+            end
+        end)
+        return info
+    end
+
+    if cls == clsid.script_restr or cls == clsid.space_restrictor then
+        local ini = se_obj:spawn_ini()
+        if ini and ini:section_exist("sr_level_changer") then
+            if ini:line_exist("sr_level_changer", "dest_level") then
+                info.dest_level = ini:r_string("sr_level_changer", "dest_level")
+            end
+            if ini:line_exist("sr_level_changer", "dest_game_vertex") then
+                info.dest_gvid = ini:r_u32("sr_level_changer", "dest_game_vertex")
+            end
+            return info
+        end
+    end
+
+    return nil
+end
+
+local function dft_is_in_door_registry(id)
+    if not (id and dft.door_registry) then return false end
+    for _, dsts in pairs(dft.door_registry) do
+        for _, ids in pairs(dsts) do
+            for i = 1, #ids do
+                if ids[i] == id then return true end
+            end
+        end
+    end
+    return false
+end
+
+local function dft_object_is_level_changer(id, se_obj)
+    -- Door-registry discovery only (offline heuristics). PDA menu uses dft_is_pda_transition (map spot).
+    if not se_obj then se_obj = alife_object(id) end
+    if not se_obj then return false end
+
+    local cls = 0
+    pcall(function() cls = se_obj:clsid() end)
+    if cls == clsid.level_changer or (clsid.level_changer_s and cls == clsid.level_changer_s) then
+        return true
+    end
+
+    if cls == clsid.script_restr or cls == clsid.space_restrictor then
+        local ini = se_obj:spawn_ini()
+        if ini and ini:section_exist("sr_level_changer") then
+            return true
+        end
+        local obj_name = string.lower(se_obj:name() or "")
+        if string.find(obj_name, "_to_", 1, true) then
+            return true
+        end
+    end
+
+    local sec = nil
+    pcall(function() sec = se_obj:section_name() end)
+    if sec and _G.lc_extra_transitions and _G.lc_extra_transitions.lc_pool
+        and _G.lc_extra_transitions.lc_pool[sec] then
+        return true
+    end
+
+    return dft_is_in_door_registry(id)
 end
 
 local function dft_is_campfire_spot(id)
     return dft_map_has_any_spot(id, DFT_SPOTS.campfire)
+end
+
+local function dft_collect_object_spots(id)
+    local spots = {}
+    if not (id and level) then return spots end
+    local names = {}
+    for i = 1, #DFT_SPOTS.level_changer do names[#names + 1] = DFT_SPOTS.level_changer[i] end
+    for i = 1, #DFT_SPOTS.campfire do names[#names + 1] = DFT_SPOTS.campfire[i] end
+    local extra = { "fast_travel", "primary_object", "green_location", "treasure" }
+    for i = 1, #extra do names[#names + 1] = extra[i] end
+    for i = 1, #names do
+        if level.map_has_object_spot(id, names[i]) ~= 0 then
+            spots[#spots + 1] = names[i]
+        end
+    end
+    return spots
+end
+
+local function dft_collect_lc_spot_ids()
+    if dft.lc_spot_ids then return dft.lc_spot_ids end
+    local ids = {}
+    if alife() then
+        pcall(function()
+            for _, obj in alife():objects() do
+                if obj and obj.id and dft_is_pda_transition(obj.id) then
+                    ids[#ids + 1] = obj.id
+                end
+            end
+        end)
+    end
+    dft.lc_spot_ids = ids
+    dft_log("cached %d LC spot object ids", #ids)
+    return ids
+end
+
+local function dft_vec_str(v)
+    if not (v and v.x) then return "?" end
+    return string.format("(%.0f,%.0f,%.0f)", v.x, v.y or 0, v.z or 0)
+end
+
+local function dft_is_base(id, se_obj)
+    if not se_obj then se_obj = alife_object(id) end
+    if not se_obj then return false end
+    if level.map_has_object_spot(id, "fast_travel") ~= 0 then return true end
+    local ok_cls, obj_cls = pcall(function() return se_obj:clsid() end)
+    return ok_cls and obj_cls == clsid.smart_terrain
 end
 
 local function dft_is_campfire(id, se_obj)
@@ -663,14 +882,48 @@ end
 
 local function dft_is_travel_destination(id)
     if not id or id <= 0 then return false end
-    if dft_is_level_changer_spot(id) then return true end
-    if dft_is_campfire(id, nil) then return true end
+    if dft_is_pda_transition(id) then return true end
     local se_obj = alife_object(id)
+    if dft_is_campfire(id, se_obj) then return true end
     if not se_obj then return false end
     if level.map_has_object_spot(id, "fast_travel") ~= 0 then return true end
     local ok_cls, obj_cls = pcall(function() return se_obj:clsid() end)
     if ok_cls and obj_cls == clsid.smart_terrain then return true end
     return false
+end
+
+local function dft_log_menu_diag(id, se_obj, ln, hint)
+    local cls, sec, name = 0, "?", "?"
+    if se_obj then
+        pcall(function() cls = se_obj:clsid() end)
+        pcall(function() sec = se_obj:section_name() end)
+        pcall(function() name = se_obj:name() end)
+    end
+    local lc_spot = dft_get_level_changer_spot(id)
+    local spots = dft_collect_object_spots(id)
+    local spots_str = (#spots > 0) and table.concat(spots, ",") or "none"
+    local dest = lc_spot and dft_read_transition_dest_info(se_obj) or nil
+    local dest_str = "n/a"
+    if dest then
+        if dest.dest_level then
+            dest_str = tostring(dest.dest_level)
+        elseif dest.dest_gvid then
+            dest_str = "gvid=" .. tostring(dest.dest_gvid)
+        end
+        if dest.dest_pos then
+            dest_str = dest_str .. " pos=" .. dft_vec_str(dest.dest_pos)
+        end
+    end
+    dft_log(
+        "menu-diag: hint=%s | id=%s ln=%s cur=%s | cls=%s sec=%s name=%s | clicked_lc=%s all_spots=[%s] trans_dest=%s | pda_trans=%s campfire=%s base=%s",
+        tostring(hint or "none"),
+        tostring(id), tostring(ln), tostring(level and level.name and level.name()),
+        tostring(cls), tostring(sec), tostring(name),
+        tostring(lc_spot or "none"), spots_str, dest_str,
+        tostring(dft_is_pda_transition(id)),
+        tostring(dft_is_campfire(id, se_obj)),
+        tostring(dft_is_base(id, se_obj))
+    )
 end
 
 -- Horizontal (PDA map) distance — ignores height difference.
@@ -684,13 +937,70 @@ local function dft_distance_pda(a, b)
     return ok and dist or nil
 end
 
+local function dft_level_offset(level_id)
+    if not level_id then return { x = 0, y = 0, z = 0 } end
+    build_level_names_registry()
+    return dft.level_offsets[level_id] or { x = 0, y = 0, z = 0 }
+end
+
+local function dft_level_id_from_gvid(gvid)
+    if not (gvid and game_graph) then return nil end
+    local gg = game_graph()
+    if not (gg and gg.valid_vertex_id and gg:valid_vertex_id(gvid)) then return nil end
+    local ok, lid = pcall(function() return gg:vertex(gvid):level_id() end)
+    return ok and lid or nil
+end
+
+local function dft_actor_level_id()
+    if not (db.actor and game_graph) then return nil end
+    return dft_level_id_from_gvid(db.actor:game_vertex_id())
+end
+
+local function dft_object_level_id(se_obj, gvid)
+    if gvid then
+        local lid = dft_level_id_from_gvid(gvid)
+        if lid then return lid end
+    end
+    if se_obj and se_obj.m_game_vertex_id then
+        return dft_level_id_from_gvid(se_obj.m_game_vertex_id)
+    end
+    return nil
+end
+
+-- Straight-line PDA map distance (global coords via per-level offsets from game.ltx).
+local function dft_pda_distance(pos_a, level_id_a, pos_b, level_id_b)
+    if not (pos_a and pos_b) then return 0 end
+
+    if game_fast_travel and game_fast_travel.global_distance_between
+        and level_id_a and level_id_b then
+        local ok, dist = pcall(function()
+            return game_fast_travel.global_distance_between(pos_a, level_id_a, pos_b, level_id_b)
+        end)
+        if ok and dist and dist > 0 then return dist end
+    end
+
+    if not level_id_a or not level_id_b or level_id_a == level_id_b then
+        return dft_distance_pda(pos_a, pos_b) or pos_a:distance_to(pos_b)
+    end
+
+    local off_a = dft_level_offset(level_id_a)
+    local off_b = dft_level_offset(level_id_b)
+    local ax = pos_a.x + (off_a.x or 0)
+    local az = pos_a.z + (off_a.z or 0)
+    local bx = pos_b.x + (off_b.x or 0)
+    local bz = pos_b.z + (off_b.z or 0)
+    local dx = ax - bx
+    local dz = az - bz
+    return math.sqrt(dx * dx + dz * dz)
+end
+
 local function dft_hostile_near_pos(from_pos, to_pos, radius)
     if not (from_pos and to_pos) then return false end
     local ok, result = pcall(function()
         local dist = dft_distance_pda(from_pos, to_pos)
         if not dist or dist >= radius then return false end
         local dy = math.abs((from_pos.y or 0) - (to_pos.y or 0))
-        return dy <= HOSTILE_VERTICAL_M
+        return dy <= HOSTILE.vertical_m
     end)
     return ok and result
 end
@@ -703,6 +1013,65 @@ local function dft_unregister_fft_map_handlers()
     if game_fast_travel.map_spot_menu_property_clicked then
         UnregisterScriptCallback("map_spot_menu_property_clicked", game_fast_travel.map_spot_menu_property_clicked)
     end
+end
+
+local function dft_pos_copy(pos)
+    if not (pos and pos.x) then return nil end
+    return vector():set(pos.x, pos.y or 0, pos.z)
+end
+
+local function dft_pos_drift(a, b)
+    if not (a and b) then return nil end
+    return dft_distance_pda(a, b) or a:distance_to(b)
+end
+
+local function dft_graph_vertex_target(gvid)
+    if not (gvid and game_graph) then return nil end
+    local gg = game_graph()
+    if not (gg and gg.valid_vertex_id and gg:valid_vertex_id(gvid)) then return nil end
+    local ok, gv = pcall(function() return gg:vertex(gvid) end)
+    if not ok or not gv then return nil end
+    local ok_p, pos = pcall(function() return gv:level_point() end)
+    local ok_l, lvid = pcall(function() return gv:level_vertex_id() end)
+    if not (ok_p and pos and pos.x and ok_l and lvid and lvid ~= INVALID_LVID) then return nil end
+    return {
+        pos = vector():set(pos.x, pos.y, pos.z),
+        lvid = lvid,
+        gvid = gvid,
+    }
+end
+
+local function dft_normalize_level_key(name)
+    if not name then return nil end
+    if type(name) == "number" then
+        build_level_names_registry()
+        return dft.level_names[name] or resolve_level_name(name)
+    end
+    name = string.lower(tostring(name))
+    name = name:gsub("_%d+$", "")
+    build_level_names_registry()
+    if dft.level_ids_by_name and dft.level_ids_by_name[name] then return name end
+    for _, n in pairs(dft.level_names or {}) do
+        if n == name then return n end
+    end
+    return name
+end
+
+local function dft_levels_match(a, b)
+    if not a or not b then return false end
+    return dft_normalize_level_key(a) == dft_normalize_level_key(b)
+end
+
+local function dft_is_viewed_level(ln)
+    local cur = level and level.name and level.name()
+    if not (ln and cur) then return true end
+    return dft_levels_match(ln, cur)
+end
+
+local function dft_object_on_actor_level(se_obj, ln)
+    if se_obj and destination_on_other_level(se_obj) then return false end
+    if ln and not dft_is_viewed_level(ln) then return false end
+    return true
 end
 
 local function dft_object_position(se_obj, id)
@@ -735,42 +1104,198 @@ local function dft_distance_to_object(se_obj, id)
         dft_log("distance: no position for id=%s name=%s", tostring(id), name)
         return nil
     end
-    local ok, dist = pcall(function() return dft_distance_pda(db.actor:position(), dest_pos) end)
+    local actor_lid = dft_actor_level_id()
+    local dest_lid = dft_object_level_id(se_obj)
+    local ok, dist = pcall(function()
+        return dft_pda_distance(db.actor:position(), actor_lid, dest_pos, dest_lid)
+    end)
     return ok and dist or nil
 end
 
-local function dft_resolve_travel_target(id)
-    if not id or id <= 0 then return nil end
-    local se_obj = alife_object(id)
-    local pos = dft_object_position(se_obj, id)
-    if not pos then return nil end
+local snap_door_pos
 
-    local lvid, gvid
-    if level and level.object_by_id then
+local function dft_fallback_travel_target(id, se_obj)
+    if not se_obj then se_obj = alife_object(id) end
+    if not se_obj then return nil end
+    local pos = dft_object_position(se_obj, id)
+    if not (pos and pos.x) then return nil end
+
+    local lvid = se_obj.m_level_vertex_id
+    local gvid = se_obj.m_game_vertex_id
+    if level and level.vertex_id then
+        local ok, lv = pcall(function() return level.vertex_id(pos) end)
+        if ok and lv and lv ~= INVALID_LVID then lvid = lv end
+    end
+
+    local gg = game_graph()
+    if gg and gg.nearest_vertex then
+        local ok, near = pcall(function() return gg:nearest_vertex(pos) end)
+        if ok and near and near ~= INVALID_GVID then gvid = near end
+    end
+    if not (lvid and lvid ~= INVALID_LVID) and gvid and gg and gg.valid_vertex_id and gg:valid_vertex_id(gvid) then
+        local ok, gv = pcall(function() return gg:vertex(gvid) end)
+        if ok and gv then
+            local ok_l, lv = pcall(function() return gv:level_vertex_id() end)
+            if ok_l and lv and lv ~= INVALID_LVID then lvid = lv end
+        end
+    end
+    if not (gvid and gvid ~= INVALID_GVID) then return nil end
+    return { pos = dft_pos_copy(pos), lvid = lvid, gvid = gvid, se_obj = se_obj }
+end
+
+-- Level changers: strict resolution (only type that may refuse travel).
+-- Bases and campfires: always resolve permissively via the branch after is_lc.
+local function dft_resolve_travel_target(id, ln, click_pos)
+    if not id or id <= 0 then return nil, "invalid_id" end
+    local se_obj = alife_object(id)
+    if not se_obj then return nil, "no_object" end
+
+    local on_actor_level = dft_object_on_actor_level(se_obj, ln)
+    local is_lc = dft_is_pda_transition(id)
+
+    if is_lc then
+        if not dft_object_on_loaded_level(se_obj) then
+            return nil, "lc_wrong_level"
+        end
+
+        local pos, lvid, gvid
+        if level and level.object_by_id then
+            local ok_o, live_obj = pcall(level.object_by_id, id)
+            if ok_o and live_obj then
+                local ok_p, lp = pcall(function() return live_obj:position() end)
+                local ok_l, lv = pcall(function() return live_obj:level_vertex_id() end)
+                local ok_g, gv = pcall(function() return live_obj:game_vertex_id() end)
+                if ok_p and lp and lp.x then pos = dft_pos_copy(lp) end
+                if ok_l and lv and lv ~= INVALID_LVID then lvid = lv end
+                if ok_g and gv and gv ~= INVALID_GVID then gvid = gv end
+            end
+        end
+
+        local snapped
+        if snap_door_pos then
+            snapped = snap_door_pos(se_obj)
+        end
+        if snapped then pos = snapped end
+        if not pos then
+            local alife_pos = se_obj.position
+            if alife_pos and alife_pos.x then pos = dft_pos_copy(alife_pos) end
+        end
+        if not (pos and pos.x) then return nil, "lc_no_pos" end
+
+        if not lvid and level and level.vertex_id then
+            local ok, lv = pcall(function() return level.vertex_id(pos) end)
+            if ok and lv and lv ~= INVALID_LVID then lvid = lv end
+        end
+        if not lvid and se_obj.m_level_vertex_id and se_obj.m_level_vertex_id ~= INVALID_LVID then
+            lvid = se_obj.m_level_vertex_id
+        end
+        if not gvid and se_obj.m_game_vertex_id and se_obj.m_game_vertex_id ~= INVALID_GVID then
+            gvid = se_obj.m_game_vertex_id
+        end
+        if not gvid then gvid = dft_graph_nearest_gvid(pos) end
+        if not lvid and gvid then
+            local graph = dft_graph_vertex_target(gvid)
+            if graph then lvid = graph.lvid end
+        end
+        if not (lvid and gvid) then
+            dft_log(" target lc id=%s: partial vertices lvid=%s gvid=%s", tostring(id), tostring(lvid), tostring(gvid))
+        end
+        return { pos = pos, lvid = lvid, gvid = gvid, se_obj = se_obj }, nil
+    end
+
+    local gvid = se_obj.m_game_vertex_id
+    local graph = (gvid and not on_actor_level) and dft_graph_vertex_target(gvid) or nil
+    local pos, lvid
+
+    if graph then
+        pos = graph.pos
+        lvid = graph.lvid
+        gvid = graph.gvid
+    elseif on_actor_level and level and level.object_by_id then
         local ok_o, obj = pcall(level.object_by_id, id)
         if ok_o and obj then
+            local ok_p, lp = pcall(function() return obj:position() end)
             local ok_l, lv = pcall(function() return obj:level_vertex_id() end)
             local ok_g, gv = pcall(function() return obj:game_vertex_id() end)
+            if ok_p and lp and lp.x then pos = dft_pos_copy(lp) end
             if ok_l and lv and lv ~= INVALID_LVID then lvid = lv end
             if ok_g and gv and gv ~= INVALID_GVID then gvid = gv end
         end
     end
-    if not lvid and level and level.vertex_id then
+
+    if not pos then
+        local alife_pos = se_obj.position
+        if alife_pos and alife_pos.x then pos = dft_pos_copy(alife_pos) end
+    end
+
+    if not pos and gvid and on_actor_level then
+        graph = dft_graph_vertex_target(gvid)
+        if graph then
+            pos = graph.pos
+            lvid = graph.lvid
+            gvid = graph.gvid
+        end
+    end
+
+    if not pos then
+        pos = dft_pos_copy(dft_object_position(se_obj, id))
+    end
+    if not pos then
+        return dft_fallback_travel_target(id, se_obj), nil
+    end
+
+    if not on_actor_level then
+        graph = graph or dft_graph_vertex_target(gvid)
+        if graph then
+            pos = graph.pos
+            lvid = graph.lvid
+            gvid = graph.gvid
+        end
+    elseif not lvid and level and level.vertex_id then
         local ok, lv = pcall(function() return level.vertex_id(pos) end)
         if ok and lv and lv ~= INVALID_LVID then lvid = lv end
     end
-    if not lvid and se_obj and se_obj.m_level_vertex_id then
-        lvid = se_obj.m_level_vertex_id
-    end
-    if not gvid and se_obj and se_obj.m_game_vertex_id then
-        gvid = se_obj.m_game_vertex_id
-    end
-    if not gvid and lvid and level and level.vertex_game_vertex_id then
-        local ok, gv = pcall(function() return level.vertex_game_vertex_id(lvid) end)
-        if ok and gv then gvid = gv end
+
+    if not gvid or gvid == INVALID_GVID then
+        if lvid then
+            local gv = dft_graph_gvid_from_lvid(lvid)
+            if gv and gv ~= INVALID_GVID then gvid = gv end
+        end
+        if not gvid or gvid == INVALID_GVID then gvid = se_obj.m_game_vertex_id end
     end
 
-    if dft_is_campfire(id, se_obj) then
+    if not (gvid and gvid ~= INVALID_GVID) then
+        local near = dft_graph_nearest_gvid(pos, TRAVEL_MAX_ALIFE_GRAPH_DRIFT)
+        if near and near ~= INVALID_GVID then gvid = near end
+        if not (gvid and gvid ~= INVALID_GVID) then
+            return dft_fallback_travel_target(id, se_obj), nil
+        end
+    end
+    local gg = game_graph()
+    if not (gg and gg.valid_vertex_id and gg:valid_vertex_id(gvid)) then
+        if gg and gg.nearest_vertex then
+            local ok, near = pcall(function() return gg:nearest_vertex(pos) end)
+            if ok and near and gg.valid_vertex_id and gg:valid_vertex_id(near) then
+                gvid = near
+            else
+                return dft_fallback_travel_target(id, se_obj), nil
+            end
+        else
+            return dft_fallback_travel_target(id, se_obj), nil
+        end
+    end
+
+    local graph_check = dft_graph_vertex_target(gvid)
+    if graph_check and not on_actor_level then
+        local drift = dft_pos_drift(pos, graph_check.pos)
+        if drift and drift > TRAVEL_MAX_ALIFE_GRAPH_DRIFT then
+            dft_log(" target id=%s: pos vs graph drift %.0fm — using graph", id, drift)
+            pos = graph_check.pos
+            lvid = graph_check.lvid
+        end
+    end
+
+    if dft_is_campfire(id, se_obj) and on_actor_level then
         pos = vector():set(pos.x - 1.5, pos.y, pos.z)
         if level and level.vertex_id then
             local ok, lv = pcall(function() return level.vertex_id(pos) end)
@@ -786,7 +1311,40 @@ local function dft_resolve_travel_target(id)
         end
     end
 
-    return { pos = pos, lvid = lvid, gvid = gvid, se_obj = se_obj }
+    if click_pos and click_pos.x and dft_is_viewed_level(ln) then
+        local click_drift = dft_pos_drift(click_pos, pos)
+        if click_drift and click_drift <= TRAVEL_MAX_CLICK_DRIFT then
+            pos = vector():set(click_pos.x, pos.y, click_pos.z)
+            if on_actor_level and level and level.vertex_id then
+                local ok, lv = pcall(function() return level.vertex_id(pos) end)
+                if ok and lv and lv ~= INVALID_LVID then
+                    lvid = lv
+                    if level.vertex_position then
+                        local ok_p, snapped = pcall(function() return level.vertex_position(lv) end)
+                        if ok_p and snapped and snapped.x then
+                            pos = vector():set(snapped.x, snapped.y + 0.12, snapped.z)
+                        end
+                    end
+                end
+            end
+            dft_log(" target id=%s: aligned to map click (%.0fm from object pos)", id, click_drift)
+        elseif click_drift and click_drift > TRAVEL_MAX_CLICK_DRIFT then
+            dft_log(" target id=%s: click %.0fm from pos — using object position", id, click_drift)
+        end
+    end
+
+    if not (lvid and lvid ~= INVALID_LVID) then
+        if graph_check then
+            lvid = graph_check.lvid
+        elseif se_obj.m_level_vertex_id and se_obj.m_level_vertex_id ~= INVALID_LVID then
+            lvid = se_obj.m_level_vertex_id
+        elseif level and level.vertex_id then
+            local ok, lv = pcall(function() return level.vertex_id(pos) end)
+            if ok and lv and lv ~= INVALID_LVID then lvid = lv end
+        end
+    end
+
+    return { pos = pos, lvid = lvid, gvid = gvid, se_obj = se_obj }, nil
 end
 
 local function dft_block_fft_travel(trip)
@@ -820,6 +1378,18 @@ local function dft_get_scouting_resource_mult()
     return 1.0 - (reduction / 100)
 end
 
+local function dft_get_scouting_ambush_spawn_bonus()
+    if haru_skills and haru_skills.skills_stats and haru_skills.skills_stats.scouting then
+        return haru_skills.skills_stats.scouting.ambush_spawn_bonus or 0
+    end
+    return dft_get_scouting_level() * SCOUTING.ambush_spawn_per_level
+end
+
+local function dft_get_encounter_offset()
+    local base = get_config("encounter_offset") or TRAVEL.encounter_offset
+    return base + dft_get_scouting_ambush_spawn_bonus()
+end
+
 local function dft_get_encumbrance_time_mult()
     if not db.actor then return 1.0 end
 
@@ -838,17 +1408,31 @@ local function dft_get_encumbrance_time_mult()
 end
 
 local function dft_game_minutes_for_dist(dist_m, sneaky, enc_mult)
-    local mins_per_km = sneaky and SNEAK_MIN_PER_KM or TRAVEL_MIN_PER_KM
+    local mins_per_km = sneaky and TRAVEL.sneak_min_per_km or TRAVEL.min_per_km
     local mins = (dist_m / 1000) * mins_per_km
     mins = mins * (enc_mult or 1.0)
     return math.max(1, math.floor(mins + 0.5))
 end
 
 local function dft_format_duration(mins)
+    mins = math.max(0, math.floor((mins or 0) + 0.5))
     local h = math.floor(mins / 60)
     local m = mins % 60
-    if h > 0 then return string.format("%dh %dm", h, m) end
-    return string.format("%dm", m)
+    if h > 0 then
+        if m > 0 then return string.format("%dh%dm", h, m) end
+        return string.format("%dh", h)
+    end
+    return string.format("%dmin", math.max(1, m))
+end
+
+local function dft_format_distance(dist_m)
+    if not dist_m or dist_m < 0 then return "?m" end
+    local d = math.floor(dist_m + 0.5)
+    if d >= 1000 then
+        local ok, s = pcall(string.format, "%.1fkm", d / 1000)
+        return ok and s or (tostring(d) .. "m")
+    end
+    return tostring(d) .. "m"
 end
 
 local function dft_is_raining()
@@ -869,21 +1453,21 @@ end
 -- Ambush detection radius only (does not affect sneak chance or travel-block radius).
 local function dft_ambush_radius_m()
     local hours = dft_get_time_hours()
-    if hours >= 21 or hours < AMBUSH_DAWN_START then
+    if hours >= 21 or hours < AMBUSH.dawn_start then
         if dft_is_raining() then
-            return AMBUSH_RADIUS_NIGHT_RAIN
+            return AMBUSH.radius_night_rain
         end
-        return AMBUSH_RADIUS_NIGHT
+        return AMBUSH.radius_night
     end
-    if (hours >= AMBUSH_DAWN_START and hours < AMBUSH_DAWN_END)
-        or (hours >= AMBUSH_DUSK_START and hours < AMBUSH_DUSK_END) then
-        return AMBUSH_RADIUS_DUSK
+    if (hours >= AMBUSH.dawn_start and hours < AMBUSH.dawn_end)
+        or (hours >= AMBUSH.dusk_start and hours < AMBUSH.dusk_end) then
+        return AMBUSH.radius_dusk
     end
-    return AMBUSH_RADIUS_BASE
+    return AMBUSH.radius_base
 end
 
 local function dft_calc_sneak_chance(sneaky_mode)
-    local cfg = tlra.active_config or refresh_active_config()
+    local cfg = dft.active_config or refresh_active_config()
     local chance = (cfg.stealth_dodge_base or 20) + dft_get_scouting_sneak_bonus()
 
     local hours = dft_get_time_hours()
@@ -899,7 +1483,7 @@ local function dft_calc_sneak_chance(sneaky_mode)
         chance = chance * 2
     end
 
-    if chance > SNEAK_CAP then chance = SNEAK_CAP end
+    if chance > TRAVEL.sneak_cap then chance = TRAVEL.sneak_cap end
     return math.floor(chance)
 end
 
@@ -917,6 +1501,7 @@ local function dft_get_journey_specs(dist_m)
     local sneaky_mins = dft_game_minutes_for_dist(dist_m, true, enc_mult)
     return {
         dist = dist_m,
+        dist_str = dft_format_distance(dist_m),
         dur_mins = normal_mins,
         dur_str = dft_format_duration(normal_mins),
         sneaky_dur_mins = sneaky_mins,
@@ -972,12 +1557,12 @@ end
 local function dft_dev_adjust_scouting(delta)
     local ok, err = xpcall(function()
         if not (haru_skills and haru_skills.skills_levels) then
-            tlra_msg("Scouting skill not available (Haruka Skills required).", 3)
+            dft_msg("Scouting skill not available (Haruka Skills required).", 3)
             dft_log("dev scouting: haru_skills not loaded")
             return
         end
         if not haru_skills.skills_levels.scouting then
-            tlra_msg("Scouting skill not registered - start a new game or reload after installing the mod.", 5)
+            dft_msg("Scouting skill not registered - start a new game or reload after installing the mod.", 5)
             dft_log_error("dev scouting: skills_levels.scouting missing")
             return
         end
@@ -993,12 +1578,12 @@ local function dft_dev_adjust_scouting(delta)
         if not dft_apply_scouting_stat_delta(new_lvl - old_lvl) then
             dft_log("dev scouting: stats table missing, level set to %d without stat refresh", new_lvl)
         end
-        tlra_msg(string.format("Scouting level: %d", new_lvl), 3)
+        dft_msg(string.format("Scouting level: %d", new_lvl), 3)
         dft_log("dev scouting level %d -> %d", old_lvl, new_lvl)
     end, debug.traceback)
     if not ok then
         dft_log_error("dev scouting failed: %s", tostring(err))
-        tlra_msg("Scouting dev key failed - see xray log.", 5)
+        dft_msg("Scouting dev key failed - see xray log.", 5)
     end
 end
 
@@ -1013,14 +1598,14 @@ local function dft_handle_dev_keys(key)
     end
 end
 
-local function dft_format_travel_menu(label_id, dur_str, sneak_pct)
-    local label = tlra_str(label_id)
-    local ok, text = pcall(string.format, "%s (%s, %d%% sneak)", label, dur_str or "?", sneak_pct or 0)
-    return ok and text or string.format("%s (%s)", label, dur_str or "?")
+local function dft_format_travel_menu(label_id, dist_str, dur_str, sneak_pct)
+    local label = dft_str(label_id)
+    local ok, text = pcall(string.format, "%s (%s, %s, %d%% sneak)", label, dist_str or "?m", dur_str or "?", sneak_pct or 0)
+    return ok and text or string.format("%s (%s, %s)", label, dist_str or "?m", dur_str or "?")
 end
 
 local function dft_calc_guide_cost(dist)
-    local cfg = tlra.active_config or refresh_active_config()
+    local cfg = dft.active_config or refresh_active_config()
     local cost_per_km = cfg.guide_cost_per_km or 2000
     return math.floor((dist / 1000) * cost_per_km)
 end
@@ -1030,16 +1615,32 @@ local function dft_guide_distance(dest_pos, dest_obj, id)
         dest_pos = dft_object_position(dest_obj, id)
     end
     if not (dest_pos and db.actor) then return 0 end
-    local dist = 0
-    local ok, d = pcall(function() return dft_distance_pda(db.actor:position(), dest_pos) end)
-    dist = (ok and d) and d or 0
-    return dist
+
+    local actor_pos = db.actor:position()
+    local actor_lid = dft_actor_level_id()
+    local dest_lid = dft_object_level_id(dest_obj)
+
+    if not dest_lid and id then
+        local target = dft_resolve_travel_target(id, nil, nil)
+        if target then
+            dest_lid = dft_object_level_id(dest_obj, target.gvid)
+        end
+    end
+
+    return dft_pda_distance(actor_pos, actor_lid, dest_pos, dest_lid)
 end
 
 function dft_do_guide_travel(id, ln)
-    local target = dft_resolve_travel_target(id)
-    if not (target and target.pos and db.actor) then return false end
+    local target, err = dft_resolve_travel_target(id, ln, dft.last_map_click_pos)
+    if not (target and target.pos and db.actor) then
+        dft_log("guide travel: unresolved id=%s err=%s", tostring(id), tostring(err))
+        return false
+    end
     local obj = target.se_obj
+    if not dft_is_base(id, obj) then
+        dft_log("guide travel: id=%s is not a base", tostring(id))
+        return false
+    end
     local pos = target.pos
     local lvid = target.lvid
     local gvid = target.gvid
@@ -1049,16 +1650,21 @@ function dft_do_guide_travel(id, ln)
     local dist = dft_guide_distance(pos, obj, id)
     local cost = dft_calc_guide_cost(dist)
     if cost > 0 and db.actor:money() < cost then
-        tlra_msg(string.format(tlra_str("tlra_msg_cannot_afford"), tostring(cost)), 4)
+        dft_msg(string.format(dft_str("dft_msg_cannot_afford"), tostring(cost)), 4)
         return false
     end
 
     if cost > 0 then
         db.actor:give_money(-cost)
-        tlra_msg(string.format(tlra_str("dft_msg_guide_paid"), cost), get_config("message_duration") or 5)
+        dft_msg(string.format(dft_str("dft_msg_guide_paid"), cost), get_config("message_duration") or 5)
     end
 
-    local arrival = get_safe_pos(pos) or pos
+    local arrival
+    if mapchange then
+        arrival = pos
+    else
+        arrival = get_safe_pos(pos) or pos
+    end
 
     pcall(function()
         if ActorMenu and ActorMenu.get_pda_menu then
@@ -1080,7 +1686,7 @@ function dft_do_guide_travel(id, ln)
         teleport_companions(arrival, lvid, gvid)
     end
 
-    CreateTimeEvent("tlra", "guide_travel_safety", 1.0, function()
+    CreateTimeEvent("dft", "guide_travel_safety", 1.0, function()
         set_safety_active(30.0)
         return true
     end)
@@ -1089,7 +1695,7 @@ function dft_do_guide_travel(id, ln)
     return true
 end
 
-tlra_msg = function(text, secs)
+dft_msg = function(text, secs)
     if not (db.actor and db.actor:alive()) then return end
     local duration = get_config("message_duration") or secs or 10
     if actor_menu and actor_menu.set_msg then
@@ -1109,15 +1715,58 @@ local function lerp_pos(p1, p2, ratio, out)
     return out
 end
 
+local function is_pos_safe_from_anomalies(pos, radius)
+    if not (pos and db.storage and level) then return true end
+    radius = radius or 4.5
+    local r_sq = radius * radius
+    for id, _ in pairs(db.storage) do
+        if not level then return end
+        local obj = level.object_by_id(id)
+        if obj and IsAnomaly(obj) then
+            if obj:position():distance_to_sqr(pos) < r_sq then
+                return false
+            end
+        end
+    end
+    return true
+end
+
+local function get_safe_pos(pos)
+    if not pos then return db.actor:position() end
+    local lvid = level.vertex_id(pos)
+    if lvid and lvid ~= 4294967295 and lvid ~= -1 then
+        local snapped = level.vertex_position(lvid)
+        if snapped then
+            local candidate = vector():set(snapped.x, snapped.y + 0.35, snapped.z)
+            if is_pos_safe_from_anomalies(candidate) then return candidate end
+        end
+    end
+    local test_pos = vector():set(pos)
+    for i = 0, 8 do
+        test_pos.y = pos.y + i * 0.4
+        lvid = level.vertex_id(test_pos)
+        if lvid and lvid ~= 4294967295 and lvid ~= -1 then
+            local snapped = level.vertex_position(lvid)
+            if snapped then
+                local candidate = vector():set(snapped.x, snapped.y + 0.25, snapped.z)
+                if is_pos_safe_from_anomalies(candidate) then return candidate end
+            end
+        end
+    end
+    return vector():set(pos.x, pos.y + 1.5, pos.z)
+end
+
 local function apply_travel_offset(pos, offset_m)
-    if not (pos and offset_m and offset_m > 0 and tlra.start_pos and tlra.dest_pos) then
+    if not (pos and offset_m and offset_m > 0 and dft.start_pos and dft.dest_pos) then
         return pos
     end
-    local dir = vector():set(tlra.dest_pos.x - tlra.start_pos.x, 0, tlra.dest_pos.z - tlra.start_pos.z)
+    local dir = vector():set(dft.dest_pos.x - dft.start_pos.x, 0, dft.dest_pos.z - dft.start_pos.z)
     local dir_len = math.sqrt(dir.x * dir.x + dir.z * dir.z)
     if dir_len < 0.1 then return pos end
     dir:normalize()
-    local pullback = math.min(offset_m, dir_len * 0.8)
+    local along = (pos.x - dft.start_pos.x) * dir.x + (pos.z - dft.start_pos.z) * dir.z
+    local pullback = math.min(offset_m, math.max(along, 0))
+    if pullback < 0.1 then return pos end
     local offset_pos = vector():set(pos.x - dir.x * pullback, pos.y, pos.z - dir.z * pullback)
     return get_safe_pos(offset_pos)
 end
@@ -1135,7 +1784,7 @@ end
 local function dft_collect_hostiles_at(pos, radius, level_id)
     local out = { squads = {}, npcs = {} }
     if not (pos and db.actor) then return out end
-    radius = radius or HOSTILE_RADIUS_M
+    radius = radius or HOSTILE.radius_m
 
     local gg = game_graph()
     local check_lid = level_id
@@ -1177,7 +1826,12 @@ local function dft_collect_hostiles_at(pos, radius, level_id)
         for id, _ in pairs(db.storage) do
             if not npc_seen[id] then
                 local npc = level.object_by_id(id)
-                if npc and npc:alive() and npc:id() ~= db.actor:id() then
+                local alive = false
+                if npc then
+                    local ok_alive, res_alive = pcall(function() return npc:alive() end)
+                    alive = ok_alive and res_alive
+                end
+                if alive and npc:id() ~= db.actor:id() then
                     if dft_hostile_near_pos(pos, npc:position(), radius) then
                         local hostile = false
                         if IsMonster(npc) then
@@ -1245,7 +1899,7 @@ local function dft_alert_ambushers(targets)
     for i = 1, #(targets.npcs or {}) do
         dft_alert_ambush_npc(targets.npcs[i])
     end
-    tlra_log(" Alerted %d squads and %d online NPCs to actor position.",
+    dft_log(" Alerted %d squads and %d online NPCs to actor position.",
         #(targets.squads or {}), #(targets.npcs or {}))
 end
 
@@ -1254,45 +1908,25 @@ local function actor_has_nearby_hostiles(radius, from_pos)
     return dft_has_nearby_hostiles_at(from_pos or db.actor:position(), radius, nil)
 end
 
-local function dft_arrival_pos_with_offset()
-    local offset_m = get_config("arrival_offset") or 10
-    if offset_m <= 0 or not tlra.start_pos then
-        return get_safe_pos(tlra.dest_pos)
-    end
-    local dir = vector():set(tlra.dest_pos.x - tlra.start_pos.x, 0, tlra.dest_pos.z - tlra.start_pos.z)
-    local dir_len = math.sqrt(dir.x * dir.x + dir.z * dir.z)
-    if dir_len < 0.1 then
-        return get_safe_pos(tlra.dest_pos)
-    end
-    dir:normalize()
-    local pullback = math.min(offset_m, dir_len * 0.8)
-    local offset_pos = vector():set(
-        tlra.dest_pos.x - dir.x * pullback,
-        tlra.dest_pos.y,
-        tlra.dest_pos.z - dir.z * pullback
-    )
-    return get_safe_pos(offset_pos)
-end
-
 local function dft_resolve_arrival_position()
     local gg = game_graph()
     local dest_lid = nil
-    if gg and tlra.dest_gvid then
-        local ok, lid = pcall(function() return gg:vertex(tlra.dest_gvid):level_id() end)
+    if gg and dft.dest_gvid then
+        local ok, lid = pcall(function() return gg:vertex(dft.dest_gvid):level_id() end)
         if ok then dest_lid = lid end
     end
 
-    local pos = dft_arrival_pos_with_offset()
-    local encounter_off = get_config("encounter_offset") or 30
+    local pos = get_safe_pos(dft.dest_pos)
+    local encounter_off = dft_get_encounter_offset()
     local forced = 0
 
-    for _ = 1, ARRIVAL_REROUTE_MAX do
-        if not dft_has_nearby_hostiles_at(pos, HOSTILE_RADIUS_M, dest_lid) then
+    for _ = 1, ARRIVAL.reroute_max do
+        if not dft_has_nearby_hostiles_at(pos, HOSTILE.radius_m, dest_lid) then
             break
         end
         forced = forced + 1
-        tlra.stats_ambushes = (tlra.stats_ambushes or 0) + 1
-        tlra_log(" Arrival blocked by hostiles (attempt %d) — offsetting %.0fm along path.", forced, encounter_off)
+        dft.stats_ambushes = (dft.stats_ambushes or 0) + 1
+        dft_log(" Arrival blocked by hostiles (attempt %d) — offsetting %.0fm along path.", forced, encounter_off)
         local next_pos = apply_travel_offset(pos, encounter_off)
         if not next_pos or next_pos:distance_to(pos) < 0.5 then
             break
@@ -1303,53 +1937,394 @@ local function dft_resolve_arrival_position()
     return pos, forced
 end
 
-local function dft_calc_dot_count(dist)
-    local per_km = get_config("map_dots_per_km")
-    if per_km == nil then per_km = get_config("map_dots") end
-    per_km = per_km or 6
-    return math.max(MAP_DOTS_MIN, math.min(MAP_DOTS_MAX, math.floor((dist / 1000) * per_km + 0.5)))
+local function dft_valid_lvid(lvid)
+    return lvid and lvid ~= INVALID_LVID and lvid ~= -1
 end
 
-local function is_pos_safe_from_anomalies(pos, radius)
-    if not (pos and db.storage and level) then return true end
-    radius = radius or 4.5
-    local r_sq = radius * radius
-    for id, _ in pairs(db.storage) do
-        if not level then return end
-        local obj = level.object_by_id(id)
-        if obj and IsAnomaly(obj) then
-            if obj:position():distance_to_sqr(pos) < r_sq then
-                return false
-            end
-        end
+local function dft_horizontal_dist(a, b)
+    if not (a and b) then return nil end
+    local dx = a.x - b.x
+    local dz = a.z - b.z
+    return math.sqrt(dx * dx + dz * dz)
+end
+
+local function dft_lvid_accessible(lvid)
+    if not dft_valid_lvid(lvid) then return false end
+    if level.is_accessible_vertex_id then
+        local ok, acc = pcall(function() return level.is_accessible_vertex_id(lvid) end)
+        if ok and not acc then return false end
     end
     return true
 end
 
-local function get_safe_pos(pos)
-    if not pos then return db.actor:position() end
-    local lvid = level.vertex_id(pos)
-    if lvid and lvid ~= 4294967295 and lvid ~= -1 then
-        local snapped = level.vertex_position(lvid)
-        if snapped then
-            local candidate = vector():set(snapped.x, snapped.y + 0.35, snapped.z)
-            if is_pos_safe_from_anomalies(candidate) then return candidate end
-        end
+local function dft_polyline_length(chain)
+    local path_len = 0
+    for i = 1, #chain - 1 do
+        path_len = path_len + (dft_distance_pda(chain[i], chain[i + 1]) or chain[i]:distance_to(chain[i + 1]))
     end
-    local test_pos = vector():set(pos)
-    for i = 0, 8 do
-        test_pos.y = pos.y + i * 0.4
-        lvid = level.vertex_id(test_pos)
-        if lvid and lvid ~= 4294967295 and lvid ~= -1 then
-            local snapped = level.vertex_position(lvid)
-            if snapped then
-                local candidate = vector():set(snapped.x, snapped.y + 0.25, snapped.z)
-                if is_pos_safe_from_anomalies(candidate) then return candidate end
+    return path_len
+end
+
+-- Higher score = better snap. Favors game-graph (road) vertices while penalizing distance from sample.
+-- Anomaly exposes no gg:nearest_vertex or level.vertex_game_vertex_id in Lua — build a per-level cache.
+dft_ensure_level_graph_cache = function()
+    local lvl_id = dft_actor_level_id()
+    local lvl_name = (level and level.name) and level.name() or nil
+    if dft.graph_cache and dft.graph_cache_level == lvl_id and dft.graph_cache_name == lvl_name then
+        return
+    end
+
+    dft.graph_cache = {}
+    dft.graph_lvid_map = {}
+    dft.graph_cache_level = lvl_id
+    dft.graph_cache_name = lvl_name
+
+    if not (lvl_id and game_graph) then return end
+    local gg = game_graph()
+    if not (gg and gg.valid_vertex_id and gg.vertex) then return end
+
+    local count = 0
+    for gvid = 0, 65534 do
+        if gg:valid_vertex_id(gvid) then
+            local ok, gv = pcall(function() return gg:vertex(gvid) end)
+            if ok and gv then
+                local ok_l, lid = pcall(function() return gv:level_id() end)
+                if ok_l and lid == lvl_id then
+                    local ok_p, gpos = pcall(function() return gv:level_point() end)
+                    local ok_lv, lvid = pcall(function() return gv:level_vertex_id() end)
+                    if ok_p and gpos and gpos.x and ok_lv and lvid and lvid ~= INVALID_LVID then
+                        local node = {
+                            gvid = gvid,
+                            lvid = lvid,
+                            pos = vector():set(gpos.x, gpos.y, gpos.z),
+                        }
+                        dft.graph_cache[#dft.graph_cache + 1] = node
+                        dft.graph_lvid_map[lvid] = gvid
+                        count = count + 1
+                    end
+                end
             end
         end
     end
-    return vector():set(pos.x, pos.y + 1.5, pos.z)
+
+    dft_path_road_log(
+        "graph cache built: %d nodes level_id=%s (%s)",
+        count, tostring(lvl_id), tostring(lvl_name)
+    )
 end
+
+dft_graph_nearest_gvid = function(pos, max_m)
+    if not pos then return nil end
+    dft_ensure_level_graph_cache()
+    max_m = max_m or 999999
+    local best_gvid, best_off = nil, max_m + 1
+    for i = 1, #(dft.graph_cache or {}) do
+        local node = dft.graph_cache[i]
+        local off = dft_horizontal_dist(pos, node.pos) or pos:distance_to(node.pos)
+        if off < best_off then
+            best_off = off
+            best_gvid = node.gvid
+        end
+    end
+    if best_gvid and best_off <= max_m then return best_gvid end
+    return nil
+end
+
+dft_graph_gvid_from_lvid = function(lvid)
+    if not lvid or lvid == INVALID_LVID then return nil end
+    dft_ensure_level_graph_cache()
+    return dft.graph_lvid_map and dft.graph_lvid_map[lvid]
+end
+
+local function dft_graph_road_point(gvid)
+    if not gvid then return nil end
+    local gg = game_graph()
+    if not (gg and gg.valid_vertex_id and gg:valid_vertex_id(gvid)) then return nil end
+    local ok, gv = pcall(function() return gg:vertex(gvid) end)
+    if not ok or not gv then return nil end
+    local ok_p, gpos = pcall(function() return gv:level_point() end)
+    local ok_l, lvid = pcall(function() return gv:level_vertex_id() end)
+    if not (ok_p and gpos and gpos.x and ok_l and lvid and lvid ~= INVALID_LVID) then return nil end
+    return {
+        pos = vector():set(gpos.x, gpos.y, gpos.z),
+        lvid = lvid,
+        gvid = gvid,
+    }
+end
+
+local function dft_travel_axes(from_pos, to_pos)
+    if not (from_pos and to_pos) then return nil, nil, 0 end
+    local dx = to_pos.x - from_pos.x
+    local dz = to_pos.z - from_pos.z
+    local len = math.sqrt(dx * dx + dz * dz)
+    if len < 0.01 then return nil, nil, len end
+    return { x = dx / len, z = dz / len }, { x = -dz / len, z = dx / len }, len
+end
+
+local function dft_forward_progress_m(from_pos, pos, dest_pos)
+    local dir = dft_travel_axes(from_pos, dest_pos)
+    if not dir then return 0 end
+    local dx = pos.x - from_pos.x
+    local dz = pos.z - from_pos.z
+    return dx * dir.x + dz * dir.z
+end
+
+local function dft_lateral_offset_m(pos, line_from, line_to)
+    local dir, perp = dft_travel_axes(line_from, line_to)
+    if not perp then return 999 end
+    local dx = pos.x - line_from.x
+    local dz = pos.z - line_from.z
+    return math.abs(dx * perp.x + dz * perp.z)
+end
+
+-- No engine "is_road" flag: roads are game-graph nodes; navmesh is on-road when
+-- it aligns tightly with the linked graph vertex level_point.
+local function dft_road_alignment_m(lvid, snapped)
+    if not (lvid and snapped) then return nil end
+    local gvid = dft_graph_gvid_from_lvid(lvid)
+    if not gvid then return nil end
+    local pt = dft_graph_road_point(gvid)
+    if not pt then return nil end
+    return dft_horizontal_dist(snapped, pt.pos) or snapped:distance_to(pt.pos)
+end
+
+local function dft_is_road_vertex(lvid, snapped, on_graph_direct)
+    if on_graph_direct then return true end
+    local align = dft_road_alignment_m(lvid, snapped)
+    local max_m = PATH.road_on_graph_max_m or 5
+    return align and align <= max_m
+end
+
+-- Pivot pathing: step 20m toward dest, snap nearest road node within road_snap_m, else navmesh on line, else raw.
+local function dft_try_snap_road_vertex(sample_pos, dest_pos, last_path_pos, step_idx)
+    if not sample_pos then return nil end
+    local search_m = PATH.road_snap_m or 19
+    local search_sq = search_m * search_m
+
+    dft_ensure_level_graph_cache()
+
+    local best, best_gvid, best_off = nil, nil, search_m + 1
+    local in_range = 0
+
+    for i = 1, #(dft.graph_cache or {}) do
+        local node = dft.graph_cache[i]
+        local dx = node.pos.x - sample_pos.x
+        local dz = node.pos.z - sample_pos.z
+        local dist_sq = dx * dx + dz * dz
+        if dist_sq <= search_sq then
+            in_range = in_range + 1
+            local off = math.sqrt(dist_sq)
+            if off < best_off then
+                best_off = off
+                best_gvid = node.gvid
+                best = vector():set(node.pos.x, node.pos.y + 0.1, node.pos.z)
+            end
+        end
+    end
+
+    if best then
+        dft_path_road_log(
+            "step %s ROAD gvid=%s in_range=%d off=%.0fm pos=%s",
+            tostring(step_idx or "?"), tostring(best_gvid), in_range, best_off, dft_vec_str(best)
+        )
+    end
+
+    return best, best_gvid
+end
+
+local function dft_try_snap_navmesh_line(sample_pos, dest_pos, last_path_pos, step_idx)
+    if not (level and level.vertex_id and sample_pos and last_path_pos) then return nil end
+    local min_fwd = PATH.path_min_forward_m or 2
+    local max_jump = PATH.max_step_jump_m or 20
+
+    local lvid = level.vertex_id(sample_pos)
+    if not dft_lvid_accessible(lvid) then return nil end
+    local snapped = level.vertex_position(lvid)
+    if not (snapped and snapped.x) then return nil end
+    if dft_is_road_vertex(lvid, snapped, false) then return nil end
+
+    local fwd = dft_forward_progress_m(last_path_pos, snapped, dest_pos)
+    if fwd < min_fwd then return nil end
+    local jumped = dft_horizontal_dist(last_path_pos, snapped) or last_path_pos:distance_to(snapped)
+    if jumped < min_fwd or jumped > max_jump + 0.01 then return nil end
+
+    local vtx = vector():set(snapped.x, snapped.y + 0.1, snapped.z)
+    dft_path_road_log("step %s NAV line pos=%s", tostring(step_idx or "?"), dft_vec_str(vtx))
+    return vtx
+end
+
+local function dft_step_pivot_snap(current, dest_pos, last_path_pos, step_m, step_idx)
+    step_m = step_m or PATH.step_m or 20
+
+    local line_len = dft_horizontal_dist(current, dest_pos) or current:distance_to(dest_pos)
+    if line_len < 0.5 then return nil, false, "end", nil end
+
+    if line_len <= step_m * 0.5 then
+        return vector():set(dest_pos.x, dest_pos.y + 0.1, dest_pos.z), false, "end", nil
+    end
+
+    local sample = vector()
+    lerp_pos(current, dest_pos, math.min(step_m / line_len, 1.0), sample)
+
+    local road_vtx, road_gvid = dft_try_snap_road_vertex(sample, dest_pos, last_path_pos, step_idx)
+    if road_vtx then return road_vtx, true, "road", road_gvid end
+
+    local nav_vtx = dft_try_snap_navmesh_line(sample, dest_pos, last_path_pos, step_idx)
+    if nav_vtx then return nav_vtx, true, "navmesh", nil end
+
+    dft_path_road_log("step %s RAW sample=%s", tostring(step_idx or "?"), dft_vec_str(sample))
+    return vector():set(sample.x, sample.y + 0.1, sample.z), false, "raw", nil
+end
+
+-- Pivot path: 20m toward dest from current; snap road/nav/raw; retarget from new point.
+local function build_line_snap_path(start_pos, dest_pos)
+    local chain = {}
+    local is_vertex = {}
+    if not (start_pos and dest_pos) then return chain, is_vertex, 0 end
+
+    local current = vector():set(start_pos.x, start_pos.y, start_pos.z)
+    chain[1] = vector():set(current.x, current.y + 0.1, current.z)
+    is_vertex[1] = false
+
+    local step_m = PATH.step_m or 20
+    local max_jump_m = PATH.max_step_jump_m or step_m
+    local straight = dft_horizontal_dist(start_pos, dest_pos) or start_pos:distance_to(dest_pos)
+    local max_iter = math.min(PATH.max_path_steps or 500, math.ceil(straight / (step_m * 0.35)) + 8)
+    local stall_limit = PATH.path_stall_steps or 3
+    local dest_prog_min = PATH.path_dest_progress_m or 1
+    local road_steps, vtx_steps, raw_steps = 0, 0, 0
+    local stall_count = 0
+    local last_dest_dist = straight
+
+    dft_path_road_log(
+        "build start=%s dest=%s straight=%.0fm step=%.0fm road_snap=%.0fm max_steps=%d",
+        dft_vec_str(start_pos), dft_vec_str(dest_pos), straight, step_m, PATH.road_snap_m or 19, max_iter
+    )
+
+    for step_idx = 1, max_iter do
+        local remain = dft_horizontal_dist(current, dest_pos) or current:distance_to(dest_pos)
+        if remain < step_m * 0.5 then break end
+
+        local last_path = chain[#chain]
+        local next_pos, snapped, snap_kind = dft_step_pivot_snap(current, dest_pos, last_path, step_m, step_idx)
+        if not next_pos then break end
+
+        local moved = dft_horizontal_dist(last_path, next_pos) or last_path:distance_to(next_pos)
+        if not moved or moved < 0.5 then
+            dft_path_road_log("step %d STOP no movement", step_idx)
+            break
+        end
+        if snap_kind ~= "road" and moved > max_jump_m + 0.5 then
+            dft_path_road_log("step %d STOP jump %.1fm (max %.0fm %s)", step_idx, moved, max_jump_m, snap_kind or "?")
+            break
+        end
+
+        local dest_dist = dft_horizontal_dist(next_pos, dest_pos) or next_pos:distance_to(dest_pos)
+        if last_dest_dist - dest_dist < dest_prog_min then
+            stall_count = stall_count + 1
+            if stall_count >= stall_limit then
+                dft_path_road_log("step %d STOP stalled", step_idx)
+                break
+            end
+        else
+            stall_count = 0
+        end
+        last_dest_dist = dest_dist
+
+        chain[#chain + 1] = next_pos
+        is_vertex[#chain] = snapped
+        if snap_kind == "road" then road_steps = road_steps + 1
+        elseif snapped then vtx_steps = vtx_steps + 1
+        else raw_steps = raw_steps + 1 end
+        current = next_pos
+    end
+
+    local last = chain[#chain]
+    local to_dest = dft_horizontal_dist(last, dest_pos) or last:distance_to(dest_pos)
+    if to_dest > 1.0 then
+        chain[#chain + 1] = vector():set(dest_pos.x, dest_pos.y + 0.1, dest_pos.z)
+        is_vertex[#chain] = false
+    end
+
+    local path_len = dft_polyline_length(chain)
+    dft_path_road_log(
+        "build done points=%d road_steps=%d vtx_steps=%d raw_steps=%d path=%.0fm",
+        #chain, road_steps, vtx_steps, raw_steps, path_len
+    )
+
+    return chain, is_vertex, path_len
+end
+
+-- Fixed-spacing samples along an existing polyline.
+local function densify_polyline(chain, spacing_m, max_count)
+    spacing_m = spacing_m or PATH.dot_spacing_m or 20
+    max_count = max_count or PATH.dot_max_count
+    if not chain or #chain < 2 then return {} end
+
+    local seg_count = #chain - 1
+    local seg_lens = {}
+    local total = 0
+    for i = 1, seg_count do
+        local d = dft_distance_pda(chain[i], chain[i + 1]) or chain[i]:distance_to(chain[i + 1])
+        seg_lens[i] = d
+        total = total + d
+    end
+    if total < spacing_m * 0.5 then return {} end
+
+    local out = {}
+    local interp = vector()
+    local along = spacing_m
+    while along < total and #out < max_count do
+        local seg_i = 1
+        local seg_off = along
+        while seg_i < seg_count and seg_off > seg_lens[seg_i] do
+            seg_off = seg_off - seg_lens[seg_i]
+            seg_i = seg_i + 1
+        end
+        if seg_i > seg_count then break end
+        local seg_len = seg_lens[seg_i]
+        local t = (seg_len > 0) and (seg_off / seg_len) or 0
+        lerp_pos(chain[seg_i], chain[seg_i + 1], t, interp)
+        out[#out + 1] = vector():set(interp.x, interp.y + 0.1, interp.z)
+        along = along + spacing_m
+    end
+    return out
+end
+
+-- Preview debug markers: dense grey along each segment, green on snapped vertices.
+local function dft_build_preview_markers(chain, is_vertex)
+    local markers = {}
+    if not chain or #chain < 2 then return markers end
+
+    local edge_sp = PATH.preview_edge_spacing_m or 5
+    for seg = 1, #chain - 1 do
+        local a, b = chain[seg], chain[seg + 1]
+        local seg_len = dft_distance_pda(a, b) or a:distance_to(b)
+        if seg_len > 0.5 then
+            local along = edge_sp
+            while along < seg_len and #markers < PATH.dot_max_count do
+                local interp = vector()
+                lerp_pos(a, b, along / seg_len, interp)
+                markers[#markers + 1] = {
+                    pos = vector():set(interp.x, interp.y + 0.1, interp.z),
+                    spot = PATH.dot_spot_debug_edge,
+                }
+                along = along + edge_sp
+            end
+        end
+    end
+
+    for i = 2, #chain - 1 do
+        if is_vertex[i] and #markers < PATH.dot_max_count then
+            markers[#markers + 1] = {
+                pos = chain[i],
+                spot = PATH.dot_spot_debug_vertex,
+            }
+        end
+    end
+    return markers
+end
+
 -- Road Bias Heuristics
 -- Samples nearby points to find flatter terrain or AI paths (roads).
 -- ============================================================
@@ -1398,8 +2373,7 @@ local function get_road_favoring_pos(base_pos, travel_dir, attempt_count)
                 -- 3. Strong pull to game graph vertices (AI road pathways)
                 local gg = game_graph()
                 if gg and gg.nearest_vertex then
-                    -- Expand search radius to 150 meters for deep road detection
-                    local ok_near, nearest_gv = pcall(function() return gg:nearest_vertex(snapped, 150) end)
+                    local ok_near, nearest_gv = pcall(function() return gg:nearest_vertex(snapped) end)
                     if ok_near and nearest_gv and gg:valid_vertex_id(nearest_gv) then
                         local gv_pos = gg:vertex(nearest_gv):level_point()
                         -- Heavily favor points close to game graph nodes (actual roads/paths)
@@ -1425,13 +2399,13 @@ local function get_road_favoring_pos(base_pos, travel_dir, attempt_count)
 end
 
 local function get_safe_lvid_pos(ratio)
-    if not (tlra.start_pos and tlra.dest_pos) then return nil end
-    local travel_dir = vector():set(tlra.dest_pos):sub(tlra.start_pos)
+    if not (dft.start_pos and dft.dest_pos) then return nil end
+    local travel_dir = vector():set(dft.dest_pos):sub(dft.start_pos)
     travel_dir:normalize()
 
     -- Interpolate along the straight-line route
     local interp = vector()
-    lerp_pos(tlra.start_pos, tlra.dest_pos, ratio, interp)
+    lerp_pos(dft.start_pos, dft.dest_pos, ratio, interp)
 
     -- v1.8.7: Apply strong road bias heuristics
     local biased = get_road_favoring_pos(interp, travel_dir, 10)
@@ -1446,69 +2420,316 @@ local function get_safe_lvid_pos(ratio)
     return biased, lvid
 end
 
--- ============================================================
--- Nav Mesh Dot Builder
--- Samples points along the route and snaps each to the nearest
--- walkable nav mesh vertex — the same system NPC navigation uses.
--- ============================================================
-local function build_navmesh_dots(start_pos, dest_pos, count)
-    local positions = {}
-    local travel_dir = vector():set(dest_pos):sub(start_pos)
-    travel_dir:normalize()
+local function build_path_dots(start_pos, dest_pos)
+    local straight = dft_distance_pda(start_pos, dest_pos) or start_pos:distance_to(dest_pos)
+    local chain, is_vertex, path_len = build_line_snap_path(start_pos, dest_pos)
 
-    local interp = vector()
-    for i = 1, count do
-        local t = i / (count + 1)
-        lerp_pos(start_pos, dest_pos, t, interp)
+    if #chain < 2 then
+        dft_log(" path: pivot failed (%.0fm straight)", straight)
+        return {}, straight
+    end
 
-        -- v1.8.7: Apply strong road bias heuristics
-        local biased = get_road_favoring_pos(interp, travel_dir, 10)
+    local vtx_count = 0
+    for i = 2, #chain - 1 do
+        if is_vertex[i] then vtx_count = vtx_count + 1 end
+    end
 
-        -- Snap to nearest walkable nav mesh vertex
-        local lvid = level.vertex_id(biased)
-        if lvid and lvid ~= 4294967295 and lvid ~= -1 then
-            local snapped = level.vertex_position(lvid)
-            if snapped then
-                positions[i] = vector():set(snapped.x, snapped.y + 0.1, snapped.z)
-            else
-                positions[i] = vector():set(biased.x, biased.y, biased.z)
+    local positions = densify_polyline(chain, PATH.dot_spacing_m)
+    dft_log(" path: pivot %d pts (%d verts) -> %d dots @ %dm, %.0fm (straight %.0fm)",
+        #chain, vtx_count, #positions, PATH.dot_spacing_m, path_len, straight)
+
+    return positions, path_len
+end
+
+local function dft_path_stats_for_target(id, ln, click_pos)
+    if not (db.actor and id and id > 0 and id ~= 65535) then return nil end
+    local target, terr = dft_resolve_travel_target(id, ln, click_pos)
+    if not target or not target.pos then return { error = terr or "no_target" } end
+    local start = db.actor:position()
+    local straight = dft_distance_pda(start, target.pos) or start:distance_to(target.pos)
+    local chain, is_vertex, path_len
+    if dft_path_road_log_enabled() or CONFIG.debug_log then
+        chain, is_vertex, path_len = build_line_snap_path(start, target.pos)
+    else
+        chain, is_vertex, path_len = {}, {}, straight
+    end
+    local vtx_count = 0
+    for i = 2, #chain - 1 do
+        if is_vertex[i] then vtx_count = vtx_count + 1 end
+    end
+    local dots = (#chain >= 2) and densify_polyline(chain, PATH.dot_spacing_m) or {}
+    return {
+        dest = target.pos,
+        straight = straight,
+        path_len = path_len or straight,
+        vertex_count = #dots,
+        vertex_snaps = vtx_count,
+        failed = #chain < 2,
+    }
+end
+
+local function dft_report_map_click(map_table, hint)
+    if not map_table then return end
+    local id = map_table.object_id
+    local ln = map_table.level_name
+    local click_pos = map_table.pos
+    dft.last_map_click_pos = click_pos
+
+    pcall(function()
+        for k, v in pairs(map_table) do
+            dft_log("  map_table.%s = %s", tostring(k), tostring(v))
+        end
+    end)
+
+    local se_obj = (id and id > 0 and id ~= 65535) and alife_object(id) or nil
+    local obj_pos = se_obj and dft_object_position(se_obj, id) or nil
+    local click_off = (click_pos and obj_pos) and dft_distance_pda(click_pos, obj_pos) or nil
+    local spots = (id and id > 0 and id ~= 65535) and dft_collect_object_spots(id) or {}
+    local lc_spot = id and dft_get_level_changer_spot(id) or nil
+    local clicked_spot = hint
+    if (not clicked_spot or clicked_spot == "") and lc_spot then
+        clicked_spot = lc_spot
+    end
+
+    local kind = "empty_map"
+    if id and id > 0 and id ~= 65535 then
+        local parts = {}
+        if clicked_spot and clicked_spot ~= "" then
+            parts[#parts + 1] = "icon=" .. tostring(clicked_spot)
+        end
+        if lc_spot then parts[#parts + 1] = "lc=" .. lc_spot end
+        if #spots > 0 then parts[#parts + 1] = "spots=[" .. table.concat(spots, ",") .. "]" end
+        if dft_is_campfire(id, se_obj) then parts[#parts + 1] = "campfire" end
+        if dft_is_base(id, se_obj) then parts[#parts + 1] = "base" end
+        if dft_is_pda_transition(id) then parts[#parts + 1] = "transition" end
+        kind = (#parts > 0) and table.concat(parts, " ") or "object"
+    end
+
+    local tinfo = se_obj and dft_read_transition_dest_info(se_obj) or nil
+    local trans_line = ""
+    if tinfo then
+        if tinfo.dest_level then trans_line = trans_line .. " -> " .. tinfo.dest_level end
+        if tinfo.dest_gvid then trans_line = trans_line .. " gvid=" .. tostring(tinfo.dest_gvid) end
+        if tinfo.dest_pos then trans_line = trans_line .. " trans_pos=" .. dft_vec_str(tinfo.dest_pos) end
+    end
+
+    local path_line = ""
+    if se_obj and dft_is_travel_destination(id) then
+        local stats = dft_path_stats_for_target(id, ln, click_pos)
+        if stats and stats.error then
+            path_line = " | path=unresolved reason=" .. tostring(stats.error)
+        elseif stats then
+            path_line = string.format(
+                " | travel=%s straight=%.0fm path=%.0fm dots=%d vtx=%d%s",
+                dft_vec_str(stats.dest), stats.straight, stats.path_len,
+                stats.vertex_count, stats.vertex_snaps,
+                stats.failed and " FAILED" or ""
+            )
+            if tinfo and tinfo.dest_pos and obj_pos then
+                local td = dft_distance_pda(obj_pos, tinfo.dest_pos)
+                if td and td > 1 then
+                    path_line = path_line .. string.format(" lc_obj_vs_trans=%.0fm", td)
+                end
             end
-        else
-            positions[i] = vector():set(biased.x, biased.y, biased.z)
         end
     end
-    return positions
+
+    dft_log(
+        "map-rclick: id=%s ln=%s hint=%s click=%s obj=%s off=%.0fm | %s%s%s",
+        tostring(id), tostring(ln), tostring(hint or "none"),
+        dft_vec_str(click_pos), dft_vec_str(obj_pos), click_off or -1,
+        kind, trans_line, path_line
+    )
+
+    if not dft.is_traveling and id and id > 0 then
+        if dft.is_path_preview and dft.path_preview_id and dft.path_preview_id ~= id then
+            dft_clear_path_preview()
+        end
+    end
 end
+
+local function dft_assign_dot_path_ratios(positions, path_len, origin_pos)
+    dft.dot_path_ratio = {}
+    if not positions or #positions == 0 then return end
+    if not path_len or path_len <= 0 then
+        for i = 1, #positions do
+            dft.dot_path_ratio[i] = i / (#positions + 1)
+        end
+        return
+    end
+    local cum = 0
+    local prev = origin_pos or dft.start_pos or (db.actor and db.actor:position())
+    for i = 1, #positions do
+        if prev then
+            cum = cum + (dft_distance_pda(prev, positions[i]) or prev:distance_to(positions[i]))
+        end
+        dft.dot_path_ratio[i] = math.min(cum / path_len, 1.0)
+        prev = positions[i]
+    end
+end
+
+function dft_remove_path_spots(obj_id)
+    if not obj_id then return end
+    pcall(function()
+        for i = 1, #PATH.dots do
+            local spot = PATH.dots[i]
+            if level.map_has_object_spot(obj_id, spot) ~= 0 then
+                level.map_remove_object_spot(obj_id, spot)
+            end
+        end
+    end)
+end
+
+function dft_ensure_path_dot(index, as_pending, spot_override)
+    if dft.dot_ids[index] then return end
+    local dp = dft.dot_positions[index]
+    if not (dp and db.actor) then return end
+    local lvid = level.vertex_id(dp)
+    if not lvid or lvid == 4294967295 or lvid == -1 then
+        lvid = db.actor:level_vertex_id()
+    end
+    local se = alife_create("device_pda", dp, lvid, db.actor:game_vertex_id())
+    if not se then return end
+    local spot = spot_override
+        or (as_pending and PATH.dot_spot_pending or PATH.dot_spot)
+    level.map_add_object_spot_ser(se.id, spot, "")
+    dft.dot_ids[index] = se.id
+    if not dft.dot_path_ratio[index] then
+        local count = dft.dot_count or #dft.dot_positions
+        dft.dot_path_ratio[index] = index / (count + 1)
+    end
+end
+
+function dft_promote_path_dot(index)
+    local obj_id = dft.dot_ids[index]
+    if not obj_id or dft.dot_done[index] then return end
+    dft.dot_done[index] = true
+    pcall(function()
+        if level.map_has_object_spot(obj_id, PATH.dot_spot_pending) ~= 0 then
+            level.map_remove_object_spot(obj_id, PATH.dot_spot_pending)
+        end
+        if level.map_has_object_spot(obj_id, PATH.dot_spot) == 0 then
+            level.map_add_object_spot_ser(obj_id, PATH.dot_spot, "")
+        end
+    end)
+end
+
+local function dft_path_preview_enabled()
+    if CONFIG.path_preview then return true end
+    local v = get_config("path_preview")
+    return v == true or v == 1
+end
+
+dft_clear_path_preview = function()
+    if not (dft.is_path_preview or next(dft.dot_ids or {})) then return end
+    cleanup_dots()
+    dft.dot_positions = {}
+    dft.is_path_preview = false
+    dft.path_preview_id = nil
+end
+
+local function dft_preview_eligible(id, se_obj, ln)
+    if dft_is_pda_transition(id) then
+        return dft_object_on_loaded_level(se_obj), true
+    end
+    if dft_is_campfire(id, se_obj) and not dft_is_cross_zone_destination(se_obj, ln) then
+        return true, false
+    end
+    if dft_is_base(id, se_obj) and not dft_is_cross_zone_destination(se_obj, ln) then
+        return true, false
+    end
+    return false, false
+end
+
+dft_build_path_preview = function(id, is_lc)
+    if dft.is_traveling or not get_config("enabled") then return end
+    if not dft_path_preview_enabled() then return end
+    if not (db.actor and id) then return end
+
+    cleanup_dots()
+    dft.dot_ids = {}
+    dft.dot_done = {}
+    dft.dot_path_ratio = {}
+    dft.is_path_preview = true
+    dft.path_preview_id = id
+
+    local target = dft_resolve_travel_target(id, dft.last_menu_target_ln, dft.last_map_click_pos)
+    if not target or not target.pos then
+        dft.is_path_preview = false
+        dft.path_preview_id = nil
+        return
+    end
+
+    local start = db.actor:position()
+    local dest = target.pos
+    local dist = dft_distance_pda(start, dest) or start:distance_to(dest)
+    local path_len = dist
+    if dist < 40 and not is_lc then
+        dft_log(" path preview: too close (%.0fm)", dist)
+        dft.is_path_preview = false
+        dft.path_preview_id = nil
+        return
+    end
+
+    local chain, is_vertex, path_len = build_line_snap_path(start, dest)
+    if #chain < 2 then
+        dft_log(" path preview: pivot failed (%.0fm straight)", dist)
+        dft.is_path_preview = false
+        dft.path_preview_id = nil
+        return
+    end
+
+    local journey_dots = densify_polyline(chain, PATH.dot_spacing_m)
+    local markers = dft_build_preview_markers(chain, is_vertex)
+    dft.dot_positions = {}
+    for i, m in ipairs(markers) do
+        dft.dot_positions[i] = m.pos
+    end
+    dft.dot_count = #markers
+    dft_log(" path preview: %d waypoints, %d debug markers, %d journey dots @ %dm (path %.0fm, straight %.0fm)",
+        #chain, #markers, #journey_dots, PATH.dot_spacing_m, path_len or dist, dist)
+
+    local spawned = 0
+    for i = 1, dft.dot_count do
+        local before = dft.dot_ids[i]
+        local spot = markers[i] and markers[i].spot or PATH.dot_spot_debug_edge
+        dft_ensure_path_dot(i, true, spot)
+        if dft.dot_ids[i] and not before then spawned = spawned + 1 end
+    end
+    if spawned < dft.dot_count then
+        dft_log(" path preview: spawned %d/%d map dots (alife_create may have failed for some)", spawned, dft.dot_count)
+    end
+end
+
 -- ============================================================
 -- 1. Persistence Logic
 -- ============================================================
-local function tlra_save(pos, lvid, gvid, final_gvid)
+local function dft_save(pos, lvid, gvid, final_gvid)
     if not db.actor then return end
-    save_var(db.actor, KEY_TRAVELING,  true)
-    save_var(db.actor, KEY_DEST_X,     pos.x)
-    save_var(db.actor, KEY_DEST_Y,     pos.y)
-    save_var(db.actor, KEY_DEST_Z,     pos.z)
-    if tlra.dest_raw_pos then
-        save_var(db.actor, KEY_DEST_RAW_X, tlra.dest_raw_pos.x)
-        save_var(db.actor, KEY_DEST_RAW_Y, tlra.dest_raw_pos.y)
-        save_var(db.actor, KEY_DEST_RAW_Z, tlra.dest_raw_pos.z)
+    save_var(db.actor, SAVE.traveling,  true)
+    save_var(db.actor, SAVE.dest_x,     pos.x)
+    save_var(db.actor, SAVE.dest_y,     pos.y)
+    save_var(db.actor, SAVE.dest_z,     pos.z)
+    if dft.dest_raw_pos then
+        save_var(db.actor, SAVE.dest_raw_x, dft.dest_raw_pos.x)
+        save_var(db.actor, SAVE.dest_raw_y, dft.dest_raw_pos.y)
+        save_var(db.actor, SAVE.dest_raw_z, dft.dest_raw_pos.z)
     end
-    save_var(db.actor, KEY_DEST_LVID,  lvid)
-    save_var(db.actor, KEY_DEST_GVID,  gvid)
-    save_var(db.actor, KEY_FINAL_GVID, final_gvid or false)
-    save_var(db.actor, KEY_COST,       tlra.journey_cost or 0)
-    save_var(db.actor, KEY_DOT_COUNT,  tlra.dot_count or 12)
-    save_var(db.actor, KEY_STATS_AMB,  tlra.stats_ambushes or 0)
-    save_var(db.actor, KEY_STATS_POS,  tlra.stats_positive or 0)
-    if tlra.final_pos then
-        save_var(db.actor, KEY_FINAL_X, tlra.final_pos.x)
-        save_var(db.actor, KEY_FINAL_Y, tlra.final_pos.y)
-        save_var(db.actor, KEY_FINAL_Z, tlra.final_pos.z)
-        save_var(db.actor, KEY_FINAL_LVID, tlra.final_lvid or 0)
+    save_var(db.actor, SAVE.dest_lvid,  lvid)
+    save_var(db.actor, SAVE.dest_gvid,  gvid)
+    save_var(db.actor, SAVE.final_gvid, final_gvid or false)
+    save_var(db.actor, SAVE.cost,       dft.journey_cost or 0)
+    save_var(db.actor, SAVE.dot_count,  dft.dot_count or 12)
+    save_var(db.actor, SAVE.stats_amb,  dft.stats_ambushes or 0)
+    if dft.final_pos then
+        save_var(db.actor, SAVE.final_x, dft.final_pos.x)
+        save_var(db.actor, SAVE.final_y, dft.final_pos.y)
+        save_var(db.actor, SAVE.final_z, dft.final_pos.z)
+        save_var(db.actor, SAVE.final_lvid, dft.final_lvid or 0)
     end
 end
 
-local function tlra_restore_weapons(force_equip)
+local function dft_restore_weapons(force_equip)
     if not db.actor then return end
     pcall(function()
         if ActorMenu and ActorMenu.get_pda_menu then
@@ -1519,18 +2740,15 @@ local function tlra_restore_weapons(force_equip)
         end
         if show_all_ui then show_all_ui(true) end
         if level then
-            level.show_weapon(true)
             level.enable_input()
+            if DFT_WEAPON_RESTORE then
+                level.show_weapon(true)
+            end
         end
-        -- Direct state resets (no counter-based restore_weapon to avoid negative counter)
+        if not DFT_WEAPON_RESTORE then return end
         pcall(function() if _G.game_object and _G.game_object.set_weapon_hide_state then db.actor:set_weapon_hide_state(false) end end)
-        pcall(function() if _G.game_object and _G.game_object.can_select_weapon then db.actor:can_select_weapon(true) end end)
-        -- Re-equip the slot the player actually had out before travelling
-        -- (1 = knife, 2 = pistol, 3 = primary). Falls back to the primary
-        -- weapon if nothing valid was recorded, instead of always forcing the
-        -- pistol/secondary like the old hardcoded activate_slot(2) did.
         if db.actor.activate_slot then
-            local target = load_var(db.actor, KEY_SAVED_SLOT, 3)
+            local target = load_var(db.actor, SAVE.saved_slot, 3)
             if type(target) ~= "number" or target < 1 or target > 3 then
                 target = 3
             end
@@ -1542,28 +2760,26 @@ local function tlra_restore_weapons(force_equip)
             end
         end
     end)
-    tlra_log(" tlra_restore_weapons called: UI/Input/Weapons unlocked.")
+    dft_log(" dft_restore_weapons: UI/input unlocked%s.", DFT_WEAPON_RESTORE and " (weapons)" or " (weapons skipped)")
 end
 
-local function tlra_clear()
+local function dft_clear()
     if not db.actor then return end
 
     -- v2.0.8: Reset runtime travel flag (closes double-click race window)
-    tlra.is_traveling = false
+    dft.is_traveling = false
 
-    save_var(db.actor, KEY_TRAVELING,  false)
-    save_var(db.actor, KEY_FINAL_GVID, false)
-    save_var(db.actor, KEY_COST,       0)
-    save_var(db.actor, KEY_DOT_COUNT,  12)
-    save_var(db.actor, KEY_STATS_AMB,  0)
-    save_var(db.actor, KEY_STATS_POS,  0)
+    save_var(db.actor, SAVE.traveling,  false)
+    save_var(db.actor, SAVE.final_gvid, false)
+    save_var(db.actor, SAVE.cost,       0)
+    save_var(db.actor, SAVE.dot_count,  12)
+    save_var(db.actor, SAVE.stats_amb,  0)
     save_var(db.actor, "tlra_ig", nil)  -- legacy guided-journey key
-    tlra.stats_ambushes = 0
-    tlra.stats_positive = 0
-    save_var(db.actor, KEY_FINAL_X, nil)
-    save_var(db.actor, KEY_FINAL_Y, nil)
-    save_var(db.actor, KEY_FINAL_Z, nil)
-    save_var(db.actor, KEY_FINAL_LVID, nil)
+    dft.stats_ambushes = 0
+    save_var(db.actor, SAVE.final_x, nil)
+    save_var(db.actor, SAVE.final_y, nil)
+    save_var(db.actor, SAVE.final_z, nil)
+    save_var(db.actor, SAVE.final_lvid, nil)
     save_var(db.actor, "tlra_nx", nil)  -- legacy next-hop keys
     save_var(db.actor, "tlra_ny", nil)
     save_var(db.actor, "tlra_nz", nil)
@@ -1572,76 +2788,77 @@ local function tlra_clear()
     save_var(db.actor, "tlra_n_dx", nil)
     save_var(db.actor, "tlra_n_dy", nil)
     save_var(db.actor, "tlra_n_dz", nil)
-    save_var(db.actor, KEY_DEST_RAW_X, nil)
-    save_var(db.actor, KEY_DEST_RAW_Y, nil)
-    save_var(db.actor, KEY_DEST_RAW_Z, nil)
+    save_var(db.actor, SAVE.dest_raw_x, nil)
+    save_var(db.actor, SAVE.dest_raw_y, nil)
+    save_var(db.actor, SAVE.dest_raw_z, nil)
 
-    tlra.start_pos = nil
-    tlra.dest_pos = nil
-    tlra.dest_lvid = nil
-    tlra.dest_gvid = nil
-    tlra.final_gvid = nil
-    tlra.final_pos = nil
-    tlra.final_lvid = nil
-    tlra.travel_dist = 0
-    tlra.current_dist = 0
-    tlra.start_game_time = nil
-    tlra.expected_duration = nil
-    tlra.encumbrance_time_mult = 1.0
-    tlra.is_transition = false
-    tlra.journey_cost = 0
-    tlra.travel_mode = "normal"
-    tlra.encounters_avoided = 0
-    tlra.arrival_forced_ambushes = 0
-    tlra.ambush_targets = nil
-    tlra.dot_count = TLRA_DOT_COUNT
+    dft.start_pos = nil
+    dft.dest_pos = nil
+    dft.dest_lvid = nil
+    dft.dest_gvid = nil
+    dft.final_gvid = nil
+    dft.final_pos = nil
+    dft.final_lvid = nil
+    dft.travel_dist = 0
+    dft.current_dist = 0
+    dft.start_game_time = nil
+    dft.expected_duration = nil
+    dft.encumbrance_time_mult = 1.0
+    dft.is_transition = false
+    dft.journey_cost = 0
+    dft.travel_mode = "normal"
+    dft.encounters_avoided = 0
+    dft.arrival_forced_ambushes = 0
+    dft.ambush_targets = nil
+    dft.dot_count = 0
     pcall(cleanup_dots)  -- prevent alife dot leaks
-    tlra.dot_positions = {}
-    tlra.dot_ids = {}
-    tlra.last_encounter_check = 0
-    tlra.last_event_msg = 0
-    tlra.last_positive_event = 0
-    tlra.dest_raw_pos = nil
+    dft.dot_positions = {}
+    dft.dot_ids = {}
+    dft.dot_done = {}
+    dft.dot_path_ratio = {}
+    dft.is_path_preview = false
+    dft.path_preview_id = nil
+    dft.last_encounter_check = 0
+    dft.dest_raw_pos = nil
 end
 
-local function tlra_load()
+local function dft_load()
     if not db.actor then return nil end
-    if not load_var(db.actor, KEY_TRAVELING, false) then return nil end
+    if not load_var(db.actor, SAVE.traveling, false) then return nil end
 
-    tlra.journey_cost = load_var(db.actor, KEY_COST, 0)
-    tlra.dot_count = load_var(db.actor, KEY_DOT_COUNT, 12)
-    tlra.stats_ambushes = load_var(db.actor, KEY_STATS_AMB, 0)
-    tlra.stats_positive = load_var(db.actor, KEY_STATS_POS, 0)
+    dft.journey_cost = load_var(db.actor, SAVE.cost, 0)
+    dft.dot_count = load_var(db.actor, SAVE.dot_count, 12)
+    dft.stats_ambushes = load_var(db.actor, SAVE.stats_amb, 0)
 
-    if load_var(db.actor, KEY_DEST_RAW_X) then
-        tlra.dest_raw_pos = vector():set(
-            load_var(db.actor, KEY_DEST_RAW_X, 0),
-            load_var(db.actor, KEY_DEST_RAW_Y, 0),
-            load_var(db.actor, KEY_DEST_RAW_Z, 0)
+    if load_var(db.actor, SAVE.dest_raw_x) then
+        dft.dest_raw_pos = vector():set(
+            load_var(db.actor, SAVE.dest_raw_x, 0),
+            load_var(db.actor, SAVE.dest_raw_y, 0),
+            load_var(db.actor, SAVE.dest_raw_z, 0)
         )
     else
-        tlra.dest_raw_pos = nil
+        dft.dest_raw_pos = nil
     end
 
     local pos = vector():set(
-        load_var(db.actor, KEY_DEST_X, 0),
-        load_var(db.actor, KEY_DEST_Y, 0),
-        load_var(db.actor, KEY_DEST_Z, 0)
+        load_var(db.actor, SAVE.dest_x, 0),
+        load_var(db.actor, SAVE.dest_y, 0),
+        load_var(db.actor, SAVE.dest_z, 0)
     )
     local f_pos = nil
-    if load_var(db.actor, KEY_FINAL_X) then
+    if load_var(db.actor, SAVE.final_x) then
         f_pos = vector():set(
-            load_var(db.actor, KEY_FINAL_X, 0),
-            load_var(db.actor, KEY_FINAL_Y, 0),
-            load_var(db.actor, KEY_FINAL_Z, 0)
+            load_var(db.actor, SAVE.final_x, 0),
+            load_var(db.actor, SAVE.final_y, 0),
+            load_var(db.actor, SAVE.final_z, 0)
         )
     end
     return pos,
-           load_var(db.actor, KEY_DEST_LVID,  0),
-           load_var(db.actor, KEY_DEST_GVID,  0),
-           load_var(db.actor, KEY_FINAL_GVID, false),
+           load_var(db.actor, SAVE.dest_lvid,  0),
+           load_var(db.actor, SAVE.dest_gvid,  0),
+           load_var(db.actor, SAVE.final_gvid, false),
            f_pos,
-           load_var(db.actor, KEY_FINAL_LVID, 0)
+           load_var(db.actor, SAVE.final_lvid, 0)
 end
 
 -- ============================================================
@@ -1658,7 +2875,7 @@ function get_config(key)
     end
 
     if DORN and DORN.mcm then
-        local section = MCM_KEY_SECTION[key] or "main"
+        local section = MCM_DEV_KEYS[key] and MCM_SECTION_DEV or "main"
         local v = DORN.mcm.get(MOD_ID, section .. "/" .. key)
         if v ~= nil then return apply_bounds(v) end
     end
@@ -1673,19 +2890,16 @@ function get_config(key)
         travel_speed           = 50,
         time_factor            = 1,
         resource_cost_mult     = 1,
-        map_dots_per_km        = 6,
-        path_marker_icon       = "green_location",
-        path_draw_mode         = "dots",
         stealth_dodge_base     = 20,
         night_sneak_bonus      = 20,
         rain_sneak_bonus       = 10,
         enable_guide_travel    = true,
         guide_cost_per_km      = 2000,
-        arrival_offset         = 10,
-        encounter_offset       = 30,
+        encounter_offset       = TRAVEL.encounter_offset,
         message_duration       = 5,
         debug_overlay          = false,
         debug_log              = false,
+        path_preview           = false,
     }
     return apply_bounds(defs[key])
 end
@@ -1694,8 +2908,10 @@ local function load_config()
     CONFIG.enabled = get_config("enabled") ~= false
     CONFIG.debug_overlay = get_config("debug_overlay") == true
     CONFIG.debug_log = get_config("debug_log") == true
-    CONFIG.scouting_level_up = DORN and DORN.mcm and DORN.mcm.key(MOD_ID, "development/scouting_level_up", nil)
-    CONFIG.scouting_level_down = DORN and DORN.mcm and DORN.mcm.key(MOD_ID, "development/scouting_level_down", nil)
+    local pp = get_config("path_preview")
+    CONFIG.path_preview = (pp == true or pp == 1)
+    CONFIG.scouting_level_up = DORN and DORN.mcm and DORN.mcm.key(MOD_ID, MCM_SECTION_DEV .. "/scouting_level_up", nil)
+    CONFIG.scouting_level_down = DORN and DORN.mcm and DORN.mcm.key(MOD_ID, MCM_SECTION_DEV .. "/scouting_level_down", nil)
     if DORN and DORN.dbg then
         DORN.dbg.set_enabled(MOD_ID, CONFIG.debug_overlay)
         if not CONFIG.debug_overlay then
@@ -1709,24 +2925,20 @@ local function load_config()
 end
 
 refresh_active_config = function()
-    tlra.active_config = {
+    dft.active_config = {
         enabled                = get_config("enabled"),
         travel_speed           = get_config("travel_speed") or 50,
         time_factor            = get_config("time_factor") or 1,
         resource_cost_mult     = get_config("resource_cost_mult") or 1,
-        map_dots_per_km        = get_config("map_dots_per_km") or get_config("map_dots") or 6,
-        path_marker_icon       = get_config("path_marker_icon") or "green_location",
-        path_draw_mode         = get_config("path_draw_mode") or "dots",
         stealth_dodge_base     = get_config("stealth_dodge_base") or 20,
         night_sneak_bonus      = get_config("night_sneak_bonus") or 20,
         rain_sneak_bonus       = get_config("rain_sneak_bonus") or 10,
         enable_guide_travel    = get_config("enable_guide_travel") ~= false,
         guide_cost_per_km      = get_config("guide_cost_per_km") or 2000,
-        arrival_offset         = get_config("arrival_offset") or 10,
-        encounter_offset       = get_config("encounter_offset") or 30,
+        encounter_offset       = get_config("encounter_offset") or TRAVEL.encounter_offset,
         message_duration       = get_config("message_duration") or 5,
     }
-    return tlra.active_config
+    return dft.active_config
 end
 
 -- ============================================================
@@ -1750,7 +2962,7 @@ local function is_zone_blocked(name)
     if not name then return false end
     if NORTH_ZONES[name] then
         if not has_alife_info("bar_deactivate_radar_done") then
-            tlra_log(" Zone %s blocked (Brain Scorcher active)", name)
+            dft_log(" Zone %s blocked (Brain Scorcher active)", name)
             return true
         end
     end
@@ -1761,7 +2973,7 @@ function find_zone_path(src, dst)
     if src == dst then return {src} end
 
     -- Phase 1: Try finding a path using purely dynamically scanned transitions (100% physically accurate)
-    if tlra.dynamic_map and tlra.dynamic_map[src] then
+    if dft.dynamic_map and dft.dynamic_map[src] then
         local queue   = {{src}}
         local visited = {[src] = true}
         while #queue > 0 do
@@ -1769,8 +2981,8 @@ function find_zone_path(src, dst)
             local node = path[#path]
 
             local seen = {}
-            if tlra.dynamic_map[node] then
-                for nb, _ in pairs(tlra.dynamic_map[node]) do seen[nb] = true end
+            if dft.dynamic_map[node] then
+                for nb, _ in pairs(dft.dynamic_map[node]) do seen[nb] = true end
             end
 
             for nb, _ in pairs(seen) do
@@ -1779,7 +2991,7 @@ function find_zone_path(src, dst)
                     local p = {unpack(path)}
                     table.insert(p, nb)
                     if nb == dst then
-                        tlra_log(" BFS: Pure dynamic path found: %s", table.concat(p, " -> "))
+                        dft_log(" BFS: Pure dynamic path found: %s", table.concat(p, " -> "))
                         return p
                     end
                     table.insert(queue, p)
@@ -1789,7 +3001,7 @@ function find_zone_path(src, dst)
     end
 
     -- Phase 2: Fallback to merged static + dynamic map if pure dynamic path is not found
-    tlra_log(" BFS: Pure dynamic path not found, falling back to static-integrated BFS")
+    dft_log(" BFS: Pure dynamic path not found, falling back to static-integrated BFS")
     local queue   = {{src}}
     local visited = {[src] = true}
     while #queue > 0 do
@@ -1798,8 +3010,8 @@ function find_zone_path(src, dst)
 
         local seen = {}
         for _, nb in ipairs(STATIC_ZONE_MAP[node] or {}) do seen[nb] = true end
-        if tlra.dynamic_map and tlra.dynamic_map[node] then
-            for nb, _ in pairs(tlra.dynamic_map[node]) do seen[nb] = true end
+        if dft.dynamic_map and dft.dynamic_map[node] then
+            for nb, _ in pairs(dft.dynamic_map[node]) do seen[nb] = true end
         end
 
         for nb, _ in pairs(seen) do
@@ -1820,7 +3032,7 @@ end
 -- Projects 3m inward from the changer toward the level interior
 -- so the actor doesn't materialise inside geometry or at the
 -- exact boundary edge where floors are often missing.
-local function snap_door_pos(obj)
+snap_door_pos = function(obj)
     if not obj then return nil end
     local base = vector():set(obj.position.x, obj.position.y, obj.position.z)
 
@@ -1987,7 +3199,7 @@ function find_door_to_legacy(target_lvl_name)
 
     -- Final desperate fallback: match by destination level ID if possible
     local target_lid = nil
-    for lid, name in pairs(tlra.level_names) do
+    for lid, name in pairs(dft.level_names) do
         if name == target_lvl_name then target_lid = lid break end
     end
 
@@ -2024,7 +3236,7 @@ function find_door_to(target_lvl_name)
     local actor_lid = gg:vertex(db.actor:game_vertex_id()):level_id()
     local actor_lvl = resolve_level_name(actor_lid) or "unknown"
 
-    tlra_log(" Looking for door from %s to %s (Hybrid Proximity Scan)", actor_lvl, target_lvl_name)
+    dft_log(" Looking for door from %s to %s (Hybrid Proximity Scan)", actor_lvl, target_lvl_name)
 
     local candidates = {}
     local actor_pos = db.actor:position()
@@ -2034,7 +3246,7 @@ function find_door_to(target_lvl_name)
         if not obj then return end
         local name = obj:name()
         if is_trader_restrictor(name) then
-            tlra_log("   Skipped candidate due to trader keyword: %s", name)
+            dft_log("   Skipped candidate due to trader keyword: %s", name)
             return
         end
         local door_pos = snap_door_pos(obj)
@@ -2071,12 +3283,12 @@ function find_door_to(target_lvl_name)
             has_spot = has_spot,
             has_name_match = has_name_match
         })
-        tlra_log("   Found candidate [%s]: %s (dist %.1f, marked: %s, name_match: %s)", source_name, name, dist, tostring(has_spot), tostring(has_name_match))
+        dft_log("   Found candidate [%s]: %s (dist %.1f, marked: %s, name_match: %s)", source_name, name, dist, tostring(has_spot), tostring(has_name_match))
     end
 
     -- 1. Dynamic Registry (Built by build_dynamic_map, covers space restrictors, ELT, and native changers)
-    if tlra.door_registry and tlra.door_registry[actor_lvl] and tlra.door_registry[actor_lvl][target_lvl_name] then
-        local ids = tlra.door_registry[actor_lvl][target_lvl_name]
+    if dft.door_registry and dft.door_registry[actor_lvl] and dft.door_registry[actor_lvl][target_lvl_name] then
+        local ids = dft.door_registry[actor_lvl][target_lvl_name]
         for _, id in ipairs(ids) do
             local obj = alife_object(id)
             if obj then
@@ -2159,7 +3371,7 @@ function find_door_to(target_lvl_name)
             return a.dist < b.dist
         end)
         local best = candidates[1]
-        tlra_log(" Unified Proximity Scan Winner: %s via %s (dist %.1f, pos: [%.1f, %.1f, %.1f])",
+        dft_log(" Unified Proximity Scan Winner: %s via %s (dist %.1f, pos: [%.1f, %.1f, %.1f])",
             best.name, best.source, best.dist, best.pos.x, best.pos.y, best.pos.z)
 
         -- Redirect to closest native level changer fallback if the selected door is scripted (space restrictor or ELT)
@@ -2173,7 +3385,7 @@ function find_door_to(target_lvl_name)
         end
 
         if not is_native_lc then
-            tlra_log("   Selected door is not a native level changer. Searching candidates for native changer at the same gateway...")
+            dft_log("   Selected door is not a native level changer. Searching candidates for native changer at the same gateway...")
             local best_lc = nil
             local min_gate_dist = 40.0 -- Must be the same gateway (within 40 meters)
             for _, cand in ipairs(candidates) do
@@ -2193,37 +3405,37 @@ function find_door_to(target_lvl_name)
                 end
             end
             if best_lc then
-                tlra_log("   Redirected to nearby native level changer: %s (dist to selected door: %.1f)", best_lc.name, min_gate_dist)
+                dft_log("   Redirected to nearby native level changer: %s (dist to selected door: %.1f)", best_lc.name, min_gate_dist)
                 best = best_lc
             else
-                tlra_log("   No nearby native level changer fallback found (threshold 40m). Using selected door directly.")
+                dft_log("   No nearby native level changer fallback found (threshold 40m). Using selected door directly.")
             end
         end
 
         -- Register for future hops to cache it
-        tlra.door_registry[actor_lvl] = tlra.door_registry[actor_lvl] or {}
-        tlra.door_registry[actor_lvl][target_lvl_name] = tlra.door_registry[actor_lvl][target_lvl_name] or {}
+        dft.door_registry[actor_lvl] = dft.door_registry[actor_lvl] or {}
+        dft.door_registry[actor_lvl][target_lvl_name] = dft.door_registry[actor_lvl][target_lvl_name] or {}
         local already_registered = false
-        for _, id in ipairs(tlra.door_registry[actor_lvl][target_lvl_name]) do
+        for _, id in ipairs(dft.door_registry[actor_lvl][target_lvl_name]) do
             if id == best.id then already_registered = true break end
         end
         if not already_registered then
-            table.insert(tlra.door_registry[actor_lvl][target_lvl_name], 1, best.id)
+            table.insert(dft.door_registry[actor_lvl][target_lvl_name], 1, best.id)
         end
 
         return { pos = best.pos, raw_pos = best.raw_pos, lvid = best.lvid, gvid = best.gvid }
     end
 
-    printf("TLRA: FAILED to find door to %s from %s after all scan stages.", target_lvl_name, actor_lvl)
+    printf("[DFT] FAILED to find door to %s from %s after all scan stages.", target_lvl_name, actor_lvl)
     return nil
 end
 
 local function advance_travel_time(ratio)
-    if not (tlra.start_game_time and tlra.expected_duration and tlra.expected_duration > 0) then
+    if not (dft.start_game_time and dft.expected_duration and dft.expected_duration > 0) then
         return
     end
-    local actual_elapsed = game.get_game_time():diffSec(tlra.start_game_time)
-    local target_seconds = math.floor(ratio * tlra.expected_duration * 60)
+    local actual_elapsed = game.get_game_time():diffSec(dft.start_game_time)
+    local target_seconds = math.floor(ratio * dft.expected_duration * 60)
     local diff_sec = target_seconds - actual_elapsed
     if diff_sec > 0 and level and level.change_game_time then
         local days = math.floor(diff_sec / 86400)
@@ -2288,11 +3500,11 @@ local function advance_travel_time(ratio)
         end)
         wipe_dangerous_stats()
         local secs = diff_sec % 60
-        tlra_log(" advance_travel_time: jumped %dd %dh %dm %ds (ratio %.2f)", days, hrs, mins, secs, ratio)
+        dft_log(" advance_travel_time: jumped %dd %dh %dm %ds (ratio %.2f)", days, hrs, mins, secs, ratio)
         -- Schedule repeated wipes for the next 10s in case damage is applied
         -- progressively over multiple ticks after the time jump
         for i = 1, 20 do
-            CreateTimeEvent("tlra", "post_jump_wipe_" .. i, i * 0.5, function()
+            CreateTimeEvent("dft", "post_jump_wipe_" .. i, i * 0.5, function()
                 if is_safety_active() then wipe_dangerous_stats() end
                 return true
             end)
@@ -2304,16 +3516,16 @@ end
 -- 4. Travel Sequence
 -- ============================================================
 function start_travel_sequence(pos, lvid, gvid, is_transition, final_gvid)
-    if tlra.is_traveling or not pos then return false end
+    if dft.is_traveling or not pos then return false end
     if not (db and db.actor) then return false end
 
     -- v2.0.8: Set traveling flag immediately to close double-click race window.
-    -- fail_start -> tlra_clear will reset it if the travel attempt fails.
-    tlra.is_traveling = true
+    -- fail_start -> dft_clear will reset it if the travel attempt fails.
+    dft.is_traveling = true
 
     local function fail_start(message, secs)
-        if message then tlra_msg(message, secs or 4) end
-        tlra_clear()
+        if message then dft_msg(message, secs or 4) end
+        dft_clear()
         return false
     end
 
@@ -2324,14 +3536,14 @@ function start_travel_sequence(pos, lvid, gvid, is_transition, final_gvid)
 
     -- Survival checks: Don't allow travel if bleeding or near death
     if db.actor.health < 0.2 then
-        return fail_start(tlra_str("tlra_msg_too_wounded"), 4)
+        return fail_start(dft_str("dft_msg_too_wounded"), 4)
     end
     if (db.actor.bleeding or 0) > 0.05 then
-        return fail_start(tlra_str("tlra_msg_must_stop_bleeding"), 4)
+        return fail_start(dft_str("dft_msg_must_stop_bleeding"), 4)
     end
 
-    if actor_has_nearby_hostiles(HOSTILE_RADIUS_M) then
-        return fail_start(tlra_str("dft_msg_hostiles_nearby"), 5)
+    if actor_has_nearby_hostiles(HOSTILE.radius_m) then
+        return fail_start(dft_str("dft_msg_hostiles_nearby"), 5)
     end
 
     local gg = game_graph()
@@ -2339,69 +3551,78 @@ function start_travel_sequence(pos, lvid, gvid, is_transition, final_gvid)
     local ok_dest, dest_lid = pcall(function() return gg:vertex(gvid):level_id() end)
 
     if not (ok_actor and ok_dest) then
-        tlra_log("ERROR: Invalid vertex ID for actor (%s) or destination (%s)", tostring(db.actor:game_vertex_id()), tostring(gvid))
+        dft_log("ERROR: Invalid vertex ID for actor (%s) or destination (%s)", tostring(db.actor:game_vertex_id()), tostring(gvid))
         return fail_start()
     end
 
-    tlra.is_transition = is_transition or false
-    tlra.final_gvid    = final_gvid or gvid
+    dft.is_transition = is_transition or false
+    dft.final_gvid    = final_gvid or gvid
 
     if is_transition then
-        tlra.dest_pos  = vector():set(pos.x, pos.y, pos.z)
-        tlra.dest_raw_pos = vector():set(pos.x, pos.y, pos.z)
-        tlra.dest_lvid = lvid
-        tlra.dest_gvid = gvid
-        tlra_log(" Traveling to zone exit on current map.")
+        dft.dest_pos  = vector():set(pos.x, pos.y, pos.z)
+        dft.dest_raw_pos = vector():set(pos.x, pos.y, pos.z)
+        dft.dest_lvid = lvid
+        dft.dest_gvid = gvid
+        dft_log(" Traveling to zone exit on current map.")
     elseif actor_lid ~= dest_lid then
-        return fail_start(tlra_str("dft_msg_cross_zone_denied"), 5)
+        return fail_start(dft_str("dft_msg_cross_zone_denied"), 5)
     else
-        tlra.dest_pos  = vector():set(pos.x, pos.y, pos.z)
-        tlra.dest_raw_pos = nil
-        tlra.dest_lvid = lvid
-        tlra.dest_gvid = gvid
+        dft.dest_pos  = vector():set(pos.x, pos.y, pos.z)
+        dft.dest_raw_pos = nil
+        dft.dest_lvid = lvid
+        dft.dest_gvid = gvid
     end
 
-    if not tlra.start_pos then tlra.start_pos = vector() end
+    if not dft.start_pos then dft.start_pos = vector() end
     local ap = db.actor:position()
-    tlra.start_pos:set(ap.x, ap.y, ap.z)
+    dft.start_pos:set(ap.x, ap.y, ap.z)
 
-    tlra.travel_dist = dft_distance_pda(tlra.start_pos, tlra.dest_pos) or tlra.start_pos:distance_to(tlra.dest_pos)
-    if tlra.travel_dist < 40 and not tlra.is_transition then
-        return fail_start(tlra_str("tlra_msg_too_close"), 2)
+    local straight_dist = dft_distance_pda(dft.start_pos, dft.dest_pos) or dft.start_pos:distance_to(dft.dest_pos)
+    local path_len = straight_dist
+    dft.dot_positions, path_len = build_path_dots(dft.start_pos, dft.dest_pos)
+    dft.dot_count = #dft.dot_positions
+    dft.travel_dist = math.max(path_len or straight_dist, straight_dist)
+    if dft.travel_dist < 40 and not dft.is_transition then
+        return fail_start(dft_str("dft_msg_too_close"), 2)
     end
 
-    tlra.dot_ids       = {}
+    dft.dot_ids       = {}
+    cleanup_dots()
+    dft.dot_done = {}
+    dft.dot_path_ratio = {}
+    dft.is_path_preview = false
 
-    -- Build dot positions snapped to walkable nav mesh surface
-    tlra.dot_count = dft_calc_dot_count(tlra.travel_dist)
-    tlra_log(" Nav mesh dots: %d (%.0fm, %.1f/km)", tlra.dot_count, tlra.travel_dist, get_config("map_dots_per_km") or get_config("map_dots") or 6)
-    tlra.dot_positions = build_navmesh_dots(tlra.start_pos, tlra.dest_pos, tlra.dot_count)
-    tlra_log(" Nav mesh dots built (%d positions)", #tlra.dot_positions)
+    dft_assign_dot_path_ratios(dft.dot_positions, dft.travel_dist, dft.start_pos)
+    dft_log(" Journey path: %d dots @ %dm, %.0fm along path (straight %.0fm)",
+        dft.dot_count, PATH.dot_spacing_m, dft.travel_dist, straight_dist)
+    for i = 1, dft.dot_count do
+        dft_ensure_path_dot(i, true)
+    end
 
-    tlra.current_dist   = 0
-    tlra.last_update_tg = time_global()
-    tlra.next_update    = tlra.last_update_tg + 100
-    tlra.start_game_time = game.get_game_time()
+    dft.current_dist   = 0
+    dft.last_update_tg = time_global()
+    dft.next_update    = dft.last_update_tg + 100
+    dft.start_game_time = game.get_game_time()
 
     local ok_tf, cur_tf = pcall(function() return level.get_time_factor() end)
-    tlra.orig_time_factor = (ok_tf and cur_tf) or 10
-    tlra.target_time_factor = get_config("time_factor") or 1
+    dft.orig_time_factor = (ok_tf and cur_tf) or 10
+    dft.target_time_factor = get_config("time_factor") or 1
 
-    tlra.encumbrance_time_mult = dft_get_encumbrance_time_mult()
-    tlra.encounters_avoided = 0
-    tlra.arrival_forced_ambushes = 0
+    dft.encumbrance_time_mult = dft_get_encumbrance_time_mult()
+    dft.encounters_avoided = 0
+    dft.arrival_forced_ambushes = 0
     dft_dbg_clear()
-    dft_dbg(0, string.format("Trip start | %.0fm | sneak %d%%", tlra.travel_dist, dft_calc_sneak_chance(tlra.travel_mode == "sneaky")), "cyan")
-    tlra.expected_duration = dft_game_minutes_for_dist(tlra.travel_dist, tlra.travel_mode == "sneaky", tlra.encumbrance_time_mult)
-    tlra_log(" Journey duration: %d game minutes (dist %.1f, mode %s, encumbrance x%.2f)", tlra.expected_duration, tlra.travel_dist, tlra.travel_mode, tlra.encumbrance_time_mult)
+    dft_dbg(0, string.format("Trip start | %.0fm | sneak %d%%", dft.travel_dist, dft_calc_sneak_chance(dft.travel_mode == "sneaky")), "cyan")
+    dft.expected_duration = dft_game_minutes_for_dist(dft.travel_dist, dft.travel_mode == "sneaky", dft.encumbrance_time_mult)
+    dft_log(" Journey duration: %d game minutes (dist %.1f, mode %s, encumbrance x%.2f)", dft.expected_duration, dft.travel_dist, dft.travel_mode, dft.encumbrance_time_mult)
 
-    tlra.journey_cost = 0
+    dft.journey_cost = 0
 
-    tlra.is_traveling = true
-    tlra_save(tlra.dest_pos, tlra.dest_lvid, tlra.dest_gvid, tlra.final_gvid)
+    dft.is_traveling = true
+    dft_save(dft.dest_pos, dft.dest_lvid, dft.dest_gvid, dft.final_gvid)
 
-    local start_msg = tlra.is_transition and tlra_str("tlra_msg_heading_border") or tlra_str("tlra_msg_journey_begins")
-    tlra_msg(start_msg, 5)
+    local start_msg = dft.is_transition and dft_str("dft_msg_heading_border") or dft_str("dft_msg_journey_begins")
+    dft_msg(start_msg, 5)
     return true
 end
 
@@ -2473,15 +3694,15 @@ function check_and_skip_surges()
 end
 
 function set_safety_active(duration)
-    tlra.safety_until = time_global() + (duration * 1000)
-    tlra_log("SAFETY WINDOW ACTIVATED: %d seconds", duration)
+    dft.safety_until = time_global() + (duration * 1000)
+    dft_log("SAFETY WINDOW ACTIVATED: %d seconds", duration)
 
     -- Immediate kill
     check_and_skip_surges()
 
     -- Very frequent repeated kills (this is what was missing)
     for i = 1, 40 do
-        CreateTimeEvent("tlra_safety", "kill_"..i, i * 0.6, function()
+        CreateTimeEvent("dft_safety", "kill_"..i, i * 0.6, function()
             if is_safety_active() then
                 check_and_skip_surges()
             end
@@ -2491,13 +3712,13 @@ function set_safety_active(duration)
 end
 
 function is_safety_active()
-    if tlra.is_traveling then return true end
-    return tlra.safety_until and tlra.safety_until > time_global()
+    if dft.is_traveling then return true end
+    return dft.safety_until and dft.safety_until > time_global()
 end
 
 function actor_on_before_hit(shit, bone_id)
     if is_safety_active() then
-        tlra_log(" Damage blocked by travel safety. Original power: %f, type: %d", shit.power, shit.type)
+        dft_log(" Damage blocked by travel safety. Original power: %f, type: %d", shit.power, shit.type)
         shit.power = 0
     end
 end
@@ -2507,11 +3728,38 @@ function on_option_change()
     load_config()
 end
 
+function dft_abort_journey()
+    if not dft.is_traveling then return end
+    if not (db.actor and db.actor:alive()) then return end
+
+    local ratio = 0
+    if dft.travel_dist and dft.travel_dist > 0 then
+        ratio = math.min(dft.current_dist / dft.travel_dist, 1.0)
+    end
+    local refund = process_refund(ratio)
+
+    dft_log(" Journey cancelled (%.0f%% complete) — actor stays in place.", ratio * 100)
+    cleanup_dots()
+    stop_travel_logic()
+    dft_clear()
+
+    local refund_str = (refund and refund > 0) and string.format(dft_str("dft_msg_ru_refunded"), refund) or ""
+    dft_msg(string.format(dft_str("dft_msg_aborted"), math.floor(ratio * 100), refund_str))
+
+    dft_restore_weapons(true)
+    pcall(function() save_var(db.actor, "surge_immuned", false) end)
+end
+
 function on_game_start()
     DORN = _G[DORN_COMMON_VERSION].load(MOD_ID)
     load_config()
-    tlra_log("Starting on_game_start registration...")
+    dft_log("Starting on_game_start registration...")
     build_level_names_registry()
+    dft.right_click_avail = (_G.COnRightClickMap ~= nil)
+    if dft.right_click_avail then
+        RegisterScriptCallback("on_map_right_click", dft_on_map_right_click)
+        dft_log(" on_map_right_click registered (modded PDA map clicks).")
+    end
     RegisterScriptCallback("actor_on_update",                actor_on_update)
     RegisterScriptCallback("actor_on_first_update",          actor_on_first_update)
     RegisterScriptCallback("actor_on_before_hit",            actor_on_before_hit)
@@ -2522,7 +3770,7 @@ function on_game_start()
     RegisterScriptCallback("on_option_change",               on_option_change)
     RegisterScriptCallback("on_mcm_changed",                on_option_change)
     RegisterScriptCallback("on_before_fast_travel",        dft_block_fft_travel)
-    tlra_log(" Callbacks registered.")
+    dft_log(" Callbacks registered.")
     dft_log("session start | debug_log=%s | enabled=%s",
         tostring(CONFIG.debug_log), tostring(CONFIG.enabled))
 
@@ -2530,22 +3778,14 @@ function on_game_start()
     on_option_change()
 
     -- v1.8.7: Build Dynamic Routing Map
-    CreateTimeEvent("tlra", "init_map", 1.0, function()
+    CreateTimeEvent("dft", "init_map", 1.0, function()
         build_dynamic_map()
-        return true
-    end)
-
-    -- Suppress Fair Fast Travel map menus if that mod is still installed
-    dft_unregister_fft_map_handlers()
-    CreateTimeEvent("tlra", "kill_competition", 4, function()
-        dft_unregister_fft_map_handlers()
-        tlra_log(" Fair Fast Travel map menu handlers suppressed (delayed pass).")
         return true
     end)
 
     -- BHS travel/sleep safety integration (pure monkey-patch to prevent BHS limb damage on travel/sleep)
     if zzz_player_injuries and zzz_player_injuries.actor_on_update then
-        tlra_log(" Hooking BHS zzz_player_injuries.actor_on_update for travel safety...")
+        dft_log(" Hooking BHS zzz_player_injuries.actor_on_update for travel safety...")
         local original_bhs_update = zzz_player_injuries.actor_on_update
         local bhs_idx = nil
         local last_game_time = nil
@@ -2588,18 +3828,18 @@ function on_game_start()
 end
 
 function on_loading_screen_dismissed()
-    tlra.player_ready = true
+    dft.player_ready = true
 end
 
 function actor_on_first_update()
-    tlra_log(" actor_on_first_update triggered.")
+    dft_log(" actor_on_first_update triggered.")
     dft_unregister_fft_map_handlers()
 
     build_dynamic_map()
 
     -- Silent orphan sweep 3s after load to catch dots stuck from previous session
-    CreateTimeEvent("tlra", "orphan_sweep", 3.0, function()
-        if not (db.actor and alife() and not tlra.is_traveling) then return true end
+    CreateTimeEvent("dft", "orphan_sweep", 3.0, function()
+        if not (db.actor and alife() and not dft.is_traveling) then return true end
         local purged = 0
         for i = 1, 65534 do
             local obj = alife():object(i)
@@ -2622,49 +3862,49 @@ function actor_on_first_update()
             end
         end
         if purged > 0 then
-            tlra_log(" Auto orphan sweep: removed %d stuck dot(s)", purged)
+            dft_log(" Auto orphan sweep: removed %d stuck dot(s)", purged)
         end
         return true
     end)
 
 
-    local pos, _, _, final_gvid = tlra_load()
+    local pos, _, _, final_gvid = dft_load()
     if pos and final_gvid then
-        tlra.player_ready = false
+        dft.player_ready = false
         -- Pre-activate safety immediately on first update for the level transition!
         set_safety_active(60.0)
         if db.actor then
             -- surge_immuned removed: it causes GAMMA to loop surges via start(true)
-            tlra_log(" Surge immunity pre-activated on first update for transition.")
+            dft_log(" Surge immunity pre-activated on first update for transition.")
         end
     end
 
     local resume_start_tg = nil
-    CreateTimeEvent("tlra", "resume", 1.0, function()
+    CreateTimeEvent("dft", "resume", 1.0, function()
         if not resume_start_tg then
             resume_start_tg = time_global()
             return false
         end
         if time_global() - resume_start_tg > 60000 then
-            tlra_log(" Resume timed out after 60 seconds - clearing stale journey state")
-            tlra_clear()
+            dft_log(" Resume timed out after 60 seconds - clearing stale journey state")
+            dft_clear()
             return true
         end
         if not (db.actor and alife()) then return false end
-        if not tlra.player_ready then return false end
+        if not dft.player_ready then return false end
 
-        local pos, lvid, gvid, final_gvid, f_pos, f_lvid = tlra_load()
+        local pos, lvid, gvid, final_gvid, f_pos, f_lvid = dft_load()
         if not pos or not final_gvid then
-            tlra_log(" No pending journey found on load.")
+            dft_log(" No pending journey found on load.")
             return true
         end
 
         -- v2.0.7: IMMEDIATELY clear the persistent traveling flag after reading it.
         -- This prevents infinite loading screen loops: if we crash or the travel
         -- completes instantly (same-level arrival), the next load won't re-trigger.
-        save_var(db.actor, KEY_TRAVELING, false)
+        save_var(db.actor, SAVE.traveling, false)
 
-        tlra_log(" Resuming journey state...")
+        dft_log(" Resuming journey state...")
         set_safety_active(60.0)
         check_and_skip_surges()
 
@@ -2672,56 +3912,98 @@ function actor_on_first_update()
         local actor_lid = gg:vertex(db.actor:game_vertex_id()):level_id()
         local final_lid = gg:vertex(final_gvid):level_id()
 
-        tlra.final_pos = f_pos
-        tlra.final_lvid = f_lvid
+        dft.final_pos = f_pos
+        dft.final_lvid = f_lvid
 
         -- v1.9.4: Ensure companions are with the actor immediately after level load
         teleport_companions(db.actor:position(), db.actor:level_vertex_id(), db.actor:game_vertex_id())
 
         if actor_lid ~= final_lid then
-            tlra_log(" Clearing stale cross-zone journey state after level load.")
-            tlra_clear()
+            dft_log(" Clearing stale cross-zone journey state after level load.")
+            dft_clear()
             return true
         end
 
         pcall(function()
             if level then
-                level.show_weapon(true)
                 level.enable_input()
-            end
-            if _G.game_object and _G.game_object.set_weapon_hide_state then
-                db.actor:set_weapon_hide_state(false)
-            end
-            if _G.game_object and _G.game_object.can_select_weapon then
-                db.actor:can_select_weapon(true)
+                if DFT_WEAPON_RESTORE then
+                    level.show_weapon(true)
+                    if _G.game_object and _G.game_object.set_weapon_hide_state then
+                        db.actor:set_weapon_hide_state(false)
+                    end
+                end
             end
 
             if db.actor and db.actor.activate_slot then
                 db.actor:activate_slot(8)
             end
-            CreateTimeEvent("tlra", "reopen_pda_dialog", 0.15, function()
+            CreateTimeEvent("dft", "reopen_pda_dialog", 0.15, function()
                 if ActorMenu and ActorMenu.get_pda_menu then
                     local pda = ActorMenu.get_pda_menu()
                     if pda and not pda:IsShown() then
                         pda:ShowDialog(true)
-                        tlra_log(" Reopened PDA map screen programmatically upon travel resume.")
+                        dft_log(" Reopened PDA map screen programmatically upon travel resume.")
                     end
                 end
                 return true
             end)
         end)
 
-        tlra_msg(tlra_str("tlra_msg_resuming"), 4)
+        dft_msg(dft_str("dft_msg_resuming"), 4)
         start_travel_sequence(f_pos or pos, f_lvid or lvid, final_gvid, false, final_gvid)
         return true
     end)
 end
 
+local function dft_menu_item_is_ours(text)
+    if not text or text == "" then return false end
+    local markers = {
+        dft_str("dft_menu_travel_here"),
+        dft_str("dft_menu_sneaky_travel"),
+        dft_str("dft_menu_hire_guide"),
+        dft_str("dft_menu_cancel_travel"),
+        dft_str("dft_msg_cross_zone_denied"),
+        dft_str("dft_msg_cannot_travel_here"),
+    }
+    for i = 1, #markers do
+        if string.find(text, markers[i], 1, true) then return true end
+    end
+    return false
+end
+
+local function dft_strip_own_menu_items(pui)
+    pcall(function()
+        if not (pui and pui.GetItemsCount and pui.GetItemByIndex and pui.RemoveItem) then return end
+        local count = pui:GetItemsCount()
+        for i = count - 1, 0, -1 do
+            local item = pui:GetItemByIndex(i)
+            if item then
+                local text = ""
+                pcall(function()
+                    local tc = item:GetTextItem()
+                    if tc then text = tc:GetText() or "" end
+                end)
+                if dft_menu_item_is_ours(text) then
+                    pui:RemoveItem(item)
+                end
+            end
+        end
+    end)
+end
+
+local function dft_add_cannot_travel_item(pui, id, reason)
+    pui:AddItem(dft_str("dft_msg_cannot_travel_here"))
+    dft_log("menu: cannot travel id=%s reason=%s", tostring(id), tostring(reason or "unknown"))
+    dft_clear_path_preview()
+    return true
+end
+
 local function dft_add_guide_menu_item(pui, id, se_obj)
     local dist = dft_guide_distance(nil, se_obj, id)
-    local guide_text = tlra_str("tlra_menu_hire_guide")
+    local guide_text = dft_str("dft_menu_hire_guide")
     local guide_cost = dft_calc_guide_cost(dist)
-    local cost_str = (guide_cost > 0) and (guide_cost .. " RU") or tlra_str("tlra_menu_free")
+    local cost_str = (guide_cost > 0) and (guide_cost .. " RU") or dft_str("dft_menu_free")
     pui:AddItem(string.format("%s [%s]", guide_text, cost_str))
     dft_log("menu: guide id=%s cost=%d dist=%.0f", tostring(id), guide_cost, dist)
 end
@@ -2732,68 +4014,147 @@ local function dft_add_travel_menu_items(pui, id, is_lc)
         dft_log("menu: no specs for id=%s (lc=%s)", tostring(id), tostring(is_lc))
         return false
     end
-    pui:AddItem(dft_format_travel_menu("dft_menu_travel_here", specs.dur_str, specs.sneak_normal))
-    pui:AddItem(dft_format_travel_menu("dft_menu_sneaky_travel", specs.sneaky_dur_str, specs.sneak_sneaky))
+    pui:AddItem(dft_format_travel_menu("dft_menu_travel_here", specs.dist_str, specs.dur_str, specs.sneak_normal))
+    pui:AddItem(dft_format_travel_menu("dft_menu_sneaky_travel", specs.dist_str, specs.sneaky_dur_str, specs.sneak_sneaky))
     dft_log("menu: added travel items id=%s dist=%.0f dur=%s", tostring(id), specs.dist or 0, specs.dur_str or "?")
     return true
 end
 
-local function on_map_spot_menu_add_property_impl(pui, id, ln)
-    if not pui then
-        dft_log_error("menu: pui is nil")
-        return
-    end
-    if not get_config("enabled") then
-        dft_log("menu: disabled")
-        return
-    end
-    if tlra.is_traveling then
-        dft_log("menu: already traveling")
-        return
-    end
+local on_map_spot_menu_add_property_impl
 
-    local se_obj = alife_object(id)
-    local is_lc = dft_is_level_changer_spot(id)
-    local is_campfire = dft_is_campfire(id, se_obj)
-    local is_dest = is_lc or dft_is_travel_destination(id)
+local function dft_add_cancel_menu_item(pui)
+    pui:AddItem(dft_str("dft_menu_cancel_travel"))
+    dft_log("menu: added cancel (active journey)")
+end
 
-    dft_log("menu: id=%s ln=%s cur=%s lc=%s dest=%s campfire=%s",
-        tostring(id), tostring(ln), tostring(level and level.name and level.name()),
-        tostring(is_lc), tostring(is_dest), tostring(is_campfire))
-
-    if not is_dest then
-        dft_log("menu: skip (not a travel destination)")
-        return
-    end
-
-    -- Level changers and campfires: same-zone journey only.
-    if is_lc or is_campfire then
-        if not dft_add_travel_menu_items(pui, id, is_lc) then
-            dft_log_error("menu: no items for id=%s lc=%s campfire=%s", tostring(id), tostring(is_lc), tostring(is_campfire))
-        end
-        return
-    end
-
-    local cross_zone = dft_is_cross_zone_destination(se_obj, ln)
-    dft_log("menu: cross_zone=%s", tostring(cross_zone))
-
-    if cross_zone then
-        if get_config("enable_guide_travel") ~= false then
-            dft_add_guide_menu_item(pui, id, se_obj)
-        else
-            pui:AddItem(tlra_str("dft_msg_cross_zone_denied"))
-        end
-        return
-    end
-
-    dft_add_travel_menu_items(pui, id, false)
-    if get_config("enable_guide_travel") ~= false and se_obj then
-        dft_add_guide_menu_item(pui, id, se_obj)
+function dft_on_map_right_click(property_ui, map_table)
+    if not get_config("enabled") then return end
+    dft_report_map_click(map_table, nil)
+    if dft.is_traveling and property_ui then
+        dft_strip_own_menu_items(property_ui)
+        dft_add_cancel_menu_item(property_ui)
     end
 end
 
-function on_map_spot_menu_add_property(pui, id, ln)
-    local ok, err = xpcall(on_map_spot_menu_add_property_impl, debug.traceback, pui, id, ln)
+on_map_spot_menu_add_property_impl = function(pui, id, ln, hint)
+    dft_unregister_fft_map_handlers()
+
+    if not pui then
+        dft_log_error("menu: pui is nil")
+        return false
+    end
+    if not get_config("enabled") then
+        dft_log("menu: disabled")
+        return false
+    end
+
+    if not dft.right_click_avail then
+        dft_report_map_click({ object_id = id, level_name = ln, pos = dft.last_map_click_pos }, hint)
+    elseif hint then
+        dft_log("map-spot hint=%s id=%s (rclick hook active)", tostring(hint), tostring(id))
+    end
+
+    dft.last_menu_target_id = id
+    dft_strip_own_menu_items(pui)
+    dft.menu_open_seq = (dft.menu_open_seq or 0) + 1
+
+    local se_obj = alife_object(id)
+    dft_log_menu_diag(id, se_obj, ln, hint)
+
+    if dft.is_traveling then
+        dft_add_cancel_menu_item(pui)
+        return true
+    end
+
+    local is_lc = dft_is_pda_transition(id)
+    local is_campfire = dft_is_campfire(id, se_obj)
+    local is_base = dft_is_base(id, se_obj)
+    local cross_zone = dft_is_cross_zone_destination(se_obj, ln)
+    local guide_ok = get_config("enable_guide_travel") ~= false
+    local click_pos = dft.last_map_click_pos
+    dft.last_menu_target_ln = ln
+
+    dft_log("menu: #%d id=%s ln=%s hint=%s cur=%s lc=%s base=%s campfire=%s cross=%s",
+        dft.menu_open_seq, tostring(id), tostring(ln), tostring(hint or "none"),
+        tostring(level and level.name and level.name()),
+        tostring(is_lc), tostring(is_base), tostring(is_campfire), tostring(cross_zone))
+
+    local can_preview, preview_lc = dft_preview_eligible(id, se_obj, ln)
+
+    local function resolve_base_or_campfire()
+        local target, terr = dft_resolve_travel_target(id, ln, click_pos)
+        if not target then
+            target = dft_fallback_travel_target(id, se_obj)
+            if target then
+                dft_log("menu: fallback target id=%s (was %s)", tostring(id), tostring(terr))
+            elseif terr then
+                dft_log("menu: resolve warn id=%s err=%s — showing travel anyway", tostring(id), tostring(terr))
+            end
+        end
+        return target
+    end
+
+    local function maybe_preview(is_lc_flag)
+        if can_preview then
+            dft_build_path_preview(id, is_lc_flag)
+        else
+            dft_clear_path_preview()
+        end
+    end
+
+    if is_lc then
+        local target, terr = dft_resolve_travel_target(id, ln, click_pos)
+        if not target then
+            return dft_add_cannot_travel_item(pui, id, terr)
+        end
+        dft.last_menu_target_id = id
+        maybe_preview(true)
+        return dft_add_travel_menu_items(pui, id, true)
+    end
+
+    if is_campfire then
+        if cross_zone then
+            dft_clear_path_preview()
+            dft_log("menu: skip campfire (other zone)")
+            return false
+        end
+        resolve_base_or_campfire()
+        dft.last_menu_target_id = id
+        maybe_preview(false)
+        return dft_add_travel_menu_items(pui, id, false)
+    end
+
+    if is_base then
+        if cross_zone then
+            resolve_base_or_campfire()
+            dft.last_menu_target_id = id
+            dft_clear_path_preview()
+            if guide_ok then
+                dft_add_guide_menu_item(pui, id, se_obj)
+                return true
+            end
+            pui:AddItem(dft_str("dft_msg_cross_zone_denied"))
+            return true
+        end
+        resolve_base_or_campfire()
+        dft.last_menu_target_id = id
+        maybe_preview(false)
+        local ok = dft_add_travel_menu_items(pui, id, false)
+        if guide_ok then
+            dft_add_guide_menu_item(pui, id, se_obj)
+        end
+        return ok
+    end
+
+    dft_log("menu: skip (not a travel destination)")
+    dft_clear_path_preview()
+    return false
+end
+
+function on_map_spot_menu_add_property(pui, id, ln, hint)
+    local ok, err = xpcall(function()
+        on_map_spot_menu_add_property_impl(pui, id, ln, hint)
+    end, debug.traceback)
     if not ok then
         dft_log_error("map_spot_menu_add_property error (id=%s ln=%s): %s", tostring(id), tostring(ln), tostring(err))
     end
@@ -2801,30 +4162,42 @@ end
 
 function on_map_spot_menu_property_clicked(pui, id, ln, t)
     local ok, err = xpcall(function()
-        tlra_log(" map_spot_menu_property_clicked triggered.")
         local result = t or (pui and pui.GetResult and pui:GetResult())
+        dft_log("menu click: id=%s ln=%s result=%s", tostring(id), tostring(ln), tostring(result))
         if not result then return end
 
-        local target = dft_resolve_travel_target(id)
-        if not target then
-            dft_log_error("menu click: no target for id=%s", tostring(id))
+        if string.find(result, dft_str("dft_menu_cancel_travel"), 1, true) then
+            if dft.is_traveling then
+                dft_abort_journey()
+            end
             return
         end
 
-        local is_lc = dft_is_level_changer_spot(id)
+        id = dft.last_menu_target_id or id
+        ln = dft.last_menu_target_ln or ln
+        local is_lc = dft_is_pda_transition(id)
+        local target, terr = dft_resolve_travel_target(id, ln, dft.last_map_click_pos)
+        if not target and not is_lc then
+            target = dft_fallback_travel_target(id, alife_object(id))
+        end
+        if not target then
+            dft_log_error("menu click: no target for id=%s err=%s", tostring(id), tostring(terr))
+            return
+        end
+
         local pos, lvid, gvid = target.pos, target.lvid, target.gvid
 
-        if string.find(result, tlra_str("dft_menu_sneaky_travel"), 1, true) then
-            tlra.travel_mode = "sneaky"
-            tlra.final_pos  = vector():set(pos.x, pos.y, pos.z)
-            tlra.final_lvid = lvid
+        if string.find(result, dft_str("dft_menu_sneaky_travel"), 1, true) then
+            dft.travel_mode = "sneaky"
+            dft.final_pos  = vector():set(pos.x, pos.y, pos.z)
+            dft.final_lvid = lvid
             start_travel_sequence(pos, lvid, gvid, is_lc, gvid)
-        elseif string.find(result, tlra_str("dft_menu_travel_here"), 1, true) then
-            tlra.travel_mode = "normal"
-            tlra.final_pos  = vector():set(pos.x, pos.y, pos.z)
-            tlra.final_lvid = lvid
+        elseif string.find(result, dft_str("dft_menu_travel_here"), 1, true) then
+            dft.travel_mode = "normal"
+            dft.final_pos  = vector():set(pos.x, pos.y, pos.z)
+            dft.final_lvid = lvid
             start_travel_sequence(pos, lvid, gvid, is_lc, gvid)
-        elseif string.find(result, tlra_str("tlra_menu_hire_guide"), 1, true) then
+        elseif string.find(result, dft_str("dft_menu_hire_guide"), 1, true) then
             dft_log("Hiring guide (instant travel)...")
             if get_config("enable_guide_travel") ~= false then
                 dft_do_guide_travel(id, ln)
@@ -2837,54 +4210,13 @@ function on_map_spot_menu_property_clicked(pui, id, ln, t)
 end
 
 function on_key_press(key)
-    tlra.player_ready = true
+    dft.player_ready = true
     dft_handle_dev_keys(key)
-
-    if not tlra.is_traveling then return end
+    if not dft.is_traveling then return end
     if not (db.actor and db.actor:alive()) then return end
 
     if key == DIK_keys.DIK_BACK or key == DIK_keys.DIK_ESCAPE then
-        local ratio = math.min(tlra.current_dist / tlra.travel_dist, 1.0)
-
-        -- v1.8.7: Use AI Node Snap for Safe Abort
-        local spawn_pos = get_safe_lvid_pos(ratio) or tlra.start_pos
-
-        -- Process Refund
-        local refund = process_refund(ratio)
-
-        set_safety_active(60.0)
-        if db.actor then
-            -- surge_immuned removed: it causes GAMMA to loop surges via start(true)
-            tlra_log(" Surge immunity set on journey abort.")
-        end
-        cleanup_dots()
-        stop_travel_logic()
-        tlra_clear()
-
-        local refund_str = (refund and refund > 0) and string.format(tlra_str("tlra_msg_ru_refunded"), refund) or ""
-        tlra_msg(string.format(tlra_str("tlra_msg_aborted"), math.floor(ratio * 100), refund_str))
-
-        -- Safe Teleport Sequence (1.0s delay for stabilization)
-        CreateTimeEvent("tlra", "safe_abort", 1.0, function()
-            if not db.actor then return true end
-            set_safety_active(60.0)
-            local final_pos = get_safe_pos(spawn_pos)
-            local lvid = level.vertex_id(final_pos)
-            local gvid = db.actor:game_vertex_id()
-
-            db.actor:set_actor_position(final_pos)
-            teleport_companions(final_pos, lvid, gvid)
-
-            -- Delay weapon restore so engine finishes processing teleport hide_weapon
-            CreateTimeEvent("tlra", "abort_weapon_restore", 0.5, function()
-                tlra_restore_weapons(true)
-                tlra.safety_until = 0
-                pcall(function() save_var(db.actor, "surge_immuned", false) end)
-                tlra_log(" Safety and surge immunity cleared on weapon restore (abort).")
-                return true
-            end)
-            return true
-        end)
+        dft_abort_journey()
     end
 end
 
@@ -2898,11 +4230,11 @@ function actor_on_update()
         -- Remember the player's last-equipped weapon slot (1 knife / 2 pistol /
         -- 3 primary) while not travelling, so arrival can restore exactly what
         -- was out rather than forcing a fixed slot. Only writes on change.
-        if not tlra.is_traveling then
+        if not dft.is_traveling then
             local as = db.actor:active_slot()
-            if (as == 1 or as == 2 or as == 3) and tlra._last_weapon_slot ~= as then
-                tlra._last_weapon_slot = as
-                save_var(db.actor, KEY_SAVED_SLOT, as)
+            if (as == 1 or as == 2 or as == 3) and dft._last_weapon_slot ~= as then
+                dft._last_weapon_slot = as
+                save_var(db.actor, SAVE.saved_slot, as)
             end
         end
         if is_safety_active() then
@@ -2914,164 +4246,86 @@ function actor_on_update()
                 end
                 pcall(function() db.actor.power = 1.0 end)
 
-                if not tlra._was_invuln then
+                if not dft._was_invuln then
                     db.actor:invulnerable(true)
-                    tlra._was_invuln = true
+                    dft._was_invuln = true
                 end
 
-                if not tlra._was_sleeping then
+                if not dft._was_sleeping then
                     if actor_status_sleep and actor_status_sleep.force_sleep then
-                        tlra.orig_sleep = actor_status_sleep.force_sleep
+                        dft.orig_sleep = actor_status_sleep.force_sleep
                         actor_status_sleep.force_sleep = function() end
                     end
                     if actor_status_thirst and actor_status_thirst.force_sleep then
-                        tlra.orig_thirst = actor_status_thirst.force_sleep
+                        dft.orig_thirst = actor_status_thirst.force_sleep
                         actor_status_thirst.force_sleep = function() end
                     end
-                    tlra._was_sleeping = true
+                    dft._was_sleeping = true
                 end
             end)
 
             -- Throttle surge checks to once per second to avoid hammering the engine
             local tg_now = time_global()
-            if not tlra._last_surge_check or (tg_now - tlra._last_surge_check) > 1000 then
-                tlra._last_surge_check = tg_now
+            if not dft._last_surge_check or (tg_now - dft._last_surge_check) > 1000 then
+                dft._last_surge_check = tg_now
                 check_and_skip_surges()
             end
 
             -- v2.0.7: Continuously force weapons visible while safety is active
-            -- and travel is complete. This catches any engine or mod that re-hides
-            -- weapons after our delayed restore (belt-and-suspenders).
-            if not tlra.is_traveling then
+            if DFT_WEAPON_RESTORE and not dft.is_traveling then
                 pcall(function()
                     level.show_weapon(true)
                     level.enable_input()
                     if _G.game_object and _G.game_object.set_weapon_hide_state then db.actor:set_weapon_hide_state(false) end
-                    if _G.game_object and _G.game_object.can_select_weapon then db.actor:can_select_weapon(true) end
                 end)
             end
-        elseif tlra._was_invuln then
+        elseif dft._was_invuln then
             pcall(function() db.actor:invulnerable(false) end)
-            tlra._was_invuln = false
+            dft._was_invuln = false
 
             -- v2.0.7: One final weapon restore when safety window expires
-            -- to ensure clean state going forward
-            tlra_restore_weapons(false)
+            if DFT_WEAPON_RESTORE then
+                dft_restore_weapons(false)
+            end
 
-            if tlra._was_sleeping then
-                if actor_status_sleep and tlra.orig_sleep then
-                    actor_status_sleep.force_sleep = tlra.orig_sleep
-                    tlra.orig_sleep = nil
+            if dft._was_sleeping then
+                if actor_status_sleep and dft.orig_sleep then
+                    actor_status_sleep.force_sleep = dft.orig_sleep
+                    dft.orig_sleep = nil
                 end
-                if actor_status_thirst and tlra.orig_thirst then
-                    actor_status_thirst.force_sleep = tlra.orig_thirst
-                    tlra.orig_thirst = nil
+                if actor_status_thirst and dft.orig_thirst then
+                    actor_status_thirst.force_sleep = dft.orig_thirst
+                    dft.orig_thirst = nil
                 end
-                tlra._was_sleeping = false
+                dft._was_sleeping = false
             end
         end
     end
 
-    if not tlra.is_traveling then return end
+    if not dft.is_traveling then return end
     if not db.actor or not db.actor:alive() then
         stop_travel_logic()
-        tlra_clear()
+        dft_clear()
         return
     end
 
     -- Check and skip surges while actively traveling (throttled above)
 
     local tg = time_global()
-    if tg < tlra.next_update then return end
-    local dt = (tg - tlra.last_update_tg) / 1000
-    tlra.last_update_tg = tg
-    tlra.next_update    = tg + 100
+    if tg < dft.next_update then return end
+    local dt = (tg - dft.last_update_tg) / 1000
+    dft.last_update_tg = tg
+    dft.next_update    = tg + 100
 
-    local cfg = tlra.active_config
-
-    -- Road Events (Immersion messages)
-    if tg > (tlra.last_event_msg or 0) + 12000 then
-        tlra.last_event_msg = tg
-        if math.random() < 0.15 then
-            local events = {
-                tlra_str("tlra_road_thick_brush"),
-                tlra_str("tlra_road_dead_trees"),
-                tlra_str("tlra_road_muddy_ground"),
-                tlra_str("tlra_road_heavy_zone"),
-                tlra_str("tlra_road_crows"),
-                tlra_str("tlra_road_mutant_howl"),
-                tlra_str("tlra_road_wipe_sweat"),
-                tlra_str("tlra_road_rustle_grass"),
-                tlra_str("tlra_road_desolate_beauty"),
-                tlra_str("tlra_road_anomaly_hum"),
-            }
-
-            tlra_msg(events[math.random(#events)], 4)
-        end
-    end
-
-    -- Positive Events (v1.9.1 / v1.9.3)
-    if tg > (tlra.last_positive_event or 0) + 60000 then
-        tlra.last_positive_event = tg
-        local chance = 0.05
-        if math.random() < chance then
-            local pos_events = {
-                {msg = tlra_str("tlra_pos_peace"), action = function() db.actor:change_power(0.2) end},
-                {msg = tlra_str("tlra_pos_meditative"), action = function() end},
-                {msg = tlra_str("tlra_pos_ru_stash"), action = function() db.actor:give_money(150) end},
-                {msg = tlra_str("tlra_pos_sun_breaks"), action = function() end},
-                {msg = tlra_str("tlra_pos_med_stash"), action = function()
-                    local meds = {
-                        "medkit", "medkit_army", "medkit_scientic", "medkit_ai1", "medkit_ai2", "medkit_ai3", "medkit_cheese",
-                        "stimpack", "stimpack_army", "stimpack_scientic", "morphine", "adrenalin", "rebirth", "survival_kit",
-                        "bandage", "bandage_army", "jgut", "antirad", "antirad_cystamine", "antirad_kalium",
-                        "drug_anabiotic", "drug_antidot", "drug_booster", "drug_coagulant", "drug_psy_blockade",
-                        "drug_radioprotector", "drug_sleepingpills", "analgetic", "antibio_chlor", "antibio_sulfad",
-                        "antiemetic", "caffeine", "glucose", "glucose_s", "salicidic_acid", "tetanus", "yadylin", "akvatab"
-                    }
-                    local sec = meds[math.random(#meds)]
-                    safe_create_item(sec, "medkit")
-                end},
-                {msg = tlra_str("tlra_pos_ammo_crate"), action = function()
-                    -- Only give ammo the player can actually use
-                    local found = {}
-                    local ini = system_ini()
-                    db.actor:iterate_inventory(function(_, item)
-                        if not IsWeapon(item) then return end
-                        local sec = item:section()
-                        if not ini:section_exist(sec) then return end
-                        local ammo_str = ini:r_string_ex(sec, "ammo_class")
-                        if not ammo_str then return end
-                        for ammo_sec in ammo_str:gmatch("[^,%s]+") do
-                            if ini:section_exist(ammo_sec) then
-                                found[#found+1] = ammo_sec
-                            end
-                        end
-                    end, nil)
-                    local sec = (#found > 0) and found[math.random(#found)] or "ammo_9x18_fmj"
-                    safe_create_item(sec, "ammo_9x18_fmj")
-                end},
-                {msg = tlra_str("tlra_pos_artifact"), action = function()
-                    local arts = {"af_medusa", "af_cristall_flower", "af_night_star", "af_vyvert", "af_gravi", "af_gold_fish", "af_blood", "af_mincer_meat", "af_soul", "af_electra_sparkler", "af_electra_flash", "af_electra_moonlight", "af_rusty_sea-urchin", "af_dummy_pellicle", "af_dummy_battery", "af_dummy_dummy", "af_ice", "af_fireball", "af_cristall"}
-                    local sec = arts[math.random(#arts)]
-                    safe_create_item(sec, "af_medusa")
-                end},
-                {msg = tlra_str("tlra_pos_ridge_view"), action = function() end},
-            }
-            local ev = pos_events[math.random(#pos_events)]
-            tlra_msg(ev.msg, 5)
-            ev.action()
-            tlra.stats_positive = (tlra.stats_positive or 0) + 1
-        end
-    end
+    local cfg = dft.active_config
 
     -- Encounter logic (always enabled)
-    if tg > (tlra.last_encounter_check or 0) + 12000 then
-        tlra.last_encounter_check = tg
+    if tg > (dft.last_encounter_check or 0) + 12000 then
+        dft.last_encounter_check = tg
 
-        local cur_ratio = math.min(tlra.current_dist / tlra.travel_dist, 1.0)
+        local cur_ratio = math.min(dft.current_dist / dft.travel_dist, 1.0)
         local virtual_pos = vector()
-        lerp_pos(tlra.start_pos, tlra.dest_pos, cur_ratio, virtual_pos)
+        lerp_pos(dft.start_pos, dft.dest_pos, cur_ratio, virtual_pos)
 
         if detect_ambush(virtual_pos) then
             trigger_encounter()
@@ -3079,17 +4333,19 @@ function actor_on_update()
         end
     end
 
-    tlra.current_dist = tlra.current_dist + ((cfg.travel_speed or 50) * dt * (get_config("time_factor") or 1) / (tlra.encumbrance_time_mult or 1.0))
-    local ratio = math.min(tlra.current_dist / tlra.travel_dist, 1.0)
+    dft.current_dist = dft.current_dist + ((cfg.travel_speed or 50) * dt * (get_config("time_factor") or 1) / (dft.encumbrance_time_mult or 1.0))
+    local ratio = math.min(dft.current_dist / dft.travel_dist, 1.0)
 
-    local d_count = tlra.dot_count or TLRA_DOT_COUNT
-    local draw_mode = (cfg and cfg.path_draw_mode) or "dots"
-    if draw_mode == "dots" then
-        for i = 1, d_count do
-            local threshold = i / (d_count + 1)
-            if ratio + 0.15 >= threshold then
-                if not tlra.dot_ids[i] then spawn_dot(i) end
+    local d_count = dft.dot_count or 0
+    for i = 1, d_count do
+        local threshold = dft.dot_path_ratio[i] or (i / (d_count + 1))
+        if ratio >= threshold then
+            if not dft.dot_ids[i] then
+                dft_ensure_path_dot(i, true)
             end
+            dft_promote_path_dot(i)
+        elseif not dft.dot_ids[i] and ratio + 0.1 >= threshold then
+            dft_ensure_path_dot(i, true)
         end
     end
 
@@ -3098,27 +4354,11 @@ function actor_on_update()
     end
 end
 
-function spawn_dot(index)
-    local cfg = tlra.active_config or {}
-    if (cfg.path_draw_mode or "dots") ~= "dots" then return end
-
-    local dp = tlra.dot_positions[index]
-    if not dp then return end
-    local lvid = level.vertex_id(dp)
-    if not lvid or lvid == 4294967295 or lvid == -1 then lvid = db.actor:level_vertex_id() end
-    local se = alife_create("device_pda", dp, lvid, db.actor:game_vertex_id())
-    if se then
-        local spot = cfg.path_marker_icon or "green_location"
-        level.map_add_object_spot_ser(se.id, spot, "")
-        tlra.dot_ids[index] = se.id
-    end
-end
-
 function complete_travel_sequence()
     set_safety_active(60.0)  -- Strong GAMMA protection
     if db.actor then
         -- surge_immuned removed: it causes GAMMA to loop surges via start(true)
-        tlra_log(" Surge immunity set on complete_travel_sequence.")
+        dft_log(" Surge immunity set on complete_travel_sequence.")
     end
     cleanup_dots()
 
@@ -3128,12 +4368,12 @@ function complete_travel_sequence()
             local pda = ActorMenu.get_pda_menu()
             if pda and pda:IsShown() then
                 pda:HideDialog()
-                tlra_log(" Closed PDA GUI forcefully before teleport.")
+                dft_log(" Closed PDA GUI forcefully before teleport.")
             end
         end
         if db.actor and db.actor:active_slot() == 8 then
             db.actor:activate_slot(0)
-            tlra_log(" Holstered physical 3D PDA before teleport.")
+            dft_log(" Holstered physical 3D PDA before teleport.")
         end
     end)
 
@@ -3155,15 +4395,15 @@ function complete_travel_sequence()
 
     -- TELEPORT BEFORE TIME JUMP to prevent starting location ambushes during simulation
     local final_pos
-    if tlra.is_transition then
-        final_pos = tlra.dest_raw_pos or tlra.dest_pos
-        tlra_log(" Transition Teleport: pos=(%f, %f, %f)", final_pos.x, final_pos.y, final_pos.z)
+    if dft.is_transition then
+        final_pos = dft.dest_raw_pos or dft.dest_pos
+        dft_log(" Transition Teleport: pos=(%f, %f, %f)", final_pos.x, final_pos.y, final_pos.z)
     else
         local forced_arrival = 0
         final_pos, forced_arrival = dft_resolve_arrival_position()
-        tlra.arrival_forced_ambushes = forced_arrival
+        dft.arrival_forced_ambushes = forced_arrival
         if forced_arrival > 0 then
-            tlra_log(" Arrival resolved after %d forced offset(s) away from hostiles.", forced_arrival)
+            dft_log(" Arrival resolved after %d forced offset(s) away from hostiles.", forced_arrival)
         end
     end
     local lvid = level.vertex_id(final_pos)
@@ -3171,19 +4411,19 @@ function complete_travel_sequence()
     if db.actor then
         db.actor:set_actor_position(final_pos)
         teleport_companions(final_pos, lvid, gvid)
-        tlra_log(" Actor position set to (%f, %f, %f), actual actor position: (%f, %f, %f)", final_pos.x, final_pos.y, final_pos.z, db.actor:position().x, db.actor:position().y, db.actor:position().z)
+        dft_log(" Actor position set to (%f, %f, %f), actual actor position: (%f, %f, %f)", final_pos.x, final_pos.y, final_pos.z, db.actor:position().x, db.actor:position().y, db.actor:position().z)
 
-        if tlra.is_transition then
+        if dft.is_transition then
             -- Force physics and collision triggers to update by nudging the actor slightly 0.05s and 0.1s after teleport.
             -- Snapping direct coordinates disables collision checks, so a tiny movement is required to wake the physics engine.
-            CreateTimeEvent("tlra", "nudge_transition_1", 0.05, function()
+            CreateTimeEvent("dft", "nudge_transition_1", 0.05, function()
                 if db.actor then
                     local cp = db.actor:position()
                     db.actor:set_actor_position(vector():set(cp.x + 0.05, cp.y, cp.z + 0.05))
                 end
                 return true
             end)
-            CreateTimeEvent("tlra", "nudge_transition_2", 0.1, function()
+            CreateTimeEvent("dft", "nudge_transition_2", 0.1, function()
                 if db.actor then
                     local cp = db.actor:position()
                     db.actor:set_actor_position(vector():set(cp.x + 0.05, cp.y, cp.z + 0.05))
@@ -3198,63 +4438,59 @@ function complete_travel_sequence()
     set_safety_active(90.0)  -- Longer buffer
     check_and_skip_surges()
 
-    CreateTimeEvent("tlra", "safe_arrival", 0.8, function()
+    CreateTimeEvent("dft", "safe_arrival", 0.8, function()
         if not db.actor then return true end
         set_safety_active(60.0)  -- Extra buffer during teleport
 
         -- Actor is already at final_pos, but we ensure safety window remains
 
-        if tlra.is_transition then
-            tlra_msg(tlra_str("dft_msg_zone_exit_reached"), get_config("message_duration") or 5)
-            CreateTimeEvent("tlra", "arrival_weapon_restore", 2.0, function()
-                tlra_restore_weapons(true)
+        if dft.is_transition then
+            dft_msg(dft_str("dft_msg_zone_exit_reached"), get_config("message_duration") or 5)
+            CreateTimeEvent("dft", "arrival_weapon_restore", 2.0, function()
+                dft_restore_weapons(true)
                 return true
             end)
-            tlra_clear()
+            dft_clear()
         else
-            CreateTimeEvent("tlra", "arrival_weapon_restore", 2.0, function()
-                tlra_restore_weapons(true)
+            CreateTimeEvent("dft", "arrival_weapon_restore", 2.0, function()
+                dft_restore_weapons(true)
                 pcall(function() save_var(db.actor, "surge_immuned", false) end)
-                tlra_log(" Safety and surge immunity cleared on weapon restore (arrival).")
+                dft_log(" Safety and surge immunity cleared on weapon restore (arrival).")
                 return true
             end)
 
-            local game_time_elapsed = (tlra.expected_duration or 1) * 60
-            local hours = math.floor(game_time_elapsed / 3600)
-            local minutes = math.floor((game_time_elapsed % 3600) / 60)
+            local stats_msg = string.format(dft_str("dft_msg_dest_reached_stats"),
+                math.floor(dft.travel_dist), dft_format_duration(dft.expected_duration or 1))
 
-            local stats_msg = string.format(tlra_str("tlra_msg_dest_reached_stats"),
-                math.floor(tlra.travel_dist), hours, minutes)
-
-            if (tlra.arrival_forced_ambushes or 0) > 0 then
-                stats_msg = stats_msg .. " " .. string.format(tlra_str("dft_msg_arrival_ambush"), tlra.arrival_forced_ambushes)
-            elseif (tlra.encounters_avoided or 0) > 0 then
-                stats_msg = stats_msg .. " " .. string.format(tlra_str("dft_msg_encounters_avoided"), tlra.encounters_avoided)
+            if (dft.arrival_forced_ambushes or 0) > 0 then
+                stats_msg = stats_msg .. " " .. string.format(dft_str("dft_msg_arrival_ambush"), dft.arrival_forced_ambushes)
+            elseif (dft.encounters_avoided or 0) > 0 then
+                stats_msg = stats_msg .. " " .. string.format(dft_str("dft_msg_encounters_avoided"), dft.encounters_avoided)
             else
-                stats_msg = stats_msg .. " " .. tlra_str("dft_msg_no_encounters")
+                stats_msg = stats_msg .. " " .. dft_str("dft_msg_no_encounters")
             end
 
-            tlra_msg(stats_msg, get_config("message_duration") or 5)
+            dft_msg(stats_msg, get_config("message_duration") or 5)
 
-            dft_dbg(0, string.format("Arrived %.0fm | %dh %dm", tlra.travel_dist, hours, minutes), "cyan")
-            dft_dbg(1, string.format("Avoided %d encounter(s)", tlra.encounters_avoided or 0), "green")
+            dft_dbg(0, string.format("Arrived %.0fm | %s", dft.travel_dist, dft_format_duration(dft.expected_duration or 1)), "cyan")
+            dft_dbg(1, string.format("Avoided %d encounter(s)", dft.encounters_avoided or 0), "green")
             dft_dbg(2, string.format("Sneak %d%% | Scouting Lv%d", dft_calc_sneak_chance(false), dft_get_scouting_level()), nil)
 
-            if tlra.travel_mode == "sneaky" then
-                dft_award_scouting_xp(math.max(1, math.floor(tlra.travel_dist / 50)))
+            if dft.travel_mode == "sneaky" then
+                dft_award_scouting_xp(math.max(1, math.floor(dft.travel_dist / 50)))
             end
 
-            tlra_clear()
+            dft_clear()
         end
 
         -- Final safety cleanup (v2.1.6: safety reset delay extended to 15.0s)
-        CreateTimeEvent("tlra", "safety_reset", 15.0, function()
+        CreateTimeEvent("dft", "safety_reset", 15.0, function()
             -- One-shot: never return false here, that causes infinite re-registration.
             if db.actor then
                 pcall(function() save_var(db.actor, "surge_immuned", false) end)
             end
-            tlra.safety_until = 0
-            tlra_log(" Surge immunity and safety cleared after arrival stabilization.")
+            dft.safety_until = 0
+            dft_log(" Surge immunity and safety cleared after arrival stabilization.")
             return true
         end)
 
@@ -3263,15 +4499,15 @@ function complete_travel_sequence()
 end
 
 function process_refund(ratio)
-    if not (db.actor and tlra.journey_cost and tlra.journey_cost > 0) then return 0 end
+    if not (db.actor and dft.journey_cost and dft.journey_cost > 0) then return 0 end
 
     local remaining = 1.0 - ratio
     if remaining <= 0.05 then return 0 end -- No refund for arrival
 
-    local refund = math.floor(tlra.journey_cost * remaining)
+    local refund = math.floor(dft.journey_cost * remaining)
     if refund > 0 then
         db.actor:give_money(refund)
-        tlra_log(" Refunded %d RU from aborted journey.", refund)
+        dft_log(" Refunded %d RU from aborted journey.", refund)
     end
     return refund
 end
@@ -3288,62 +4524,61 @@ function detect_ambush(virtual_pos)
         return false
     end
 
-    tlra.stats_ambushes = (tlra.stats_ambushes or 0) + 1
+    dft.stats_ambushes = (dft.stats_ambushes or 0) + 1
 
     if actor_has_nearby_hostiles(ambush_radius) then
-        tlra.ambush_targets = targets
+        dft.ambush_targets = targets
         return true
     end
 
-    local total_chance = dft_calc_sneak_chance(tlra.travel_mode == "sneaky")
+    local total_chance = dft_calc_sneak_chance(dft.travel_mode == "sneaky")
     local roll = math.random(1, 100)
     if roll <= total_chance then
-        tlra_log("STEALTH SUCCESS: Dodged encounter! Roll: %d <= Chance: %d", roll, total_chance)
-        dft_dbg_sneak_summary(tlra.travel_mode == "sneaky", roll, total_chance, true)
+        dft_log("STEALTH SUCCESS: Dodged encounter! Roll: %d <= Chance: %d", roll, total_chance)
+        dft_dbg_sneak_summary(dft.travel_mode == "sneaky", roll, total_chance, true)
 
         pcall(function()
             xr_sound.set_sound_play(db.actor:id(), "pda_tips")
         end)
 
-        tlra_msg(string.format(tlra_str("tlra_stealth_dodged"), total_chance), get_config("message_duration") or 5)
+        dft_msg(string.format(dft_str("dft_stealth_dodged"), total_chance), get_config("message_duration") or 5)
 
-        tlra.encounters_avoided = (tlra.encounters_avoided or 0) + 1
-        tlra.stats_ambushes = math.max((tlra.stats_ambushes or 0) - 1, 0)
+        dft.encounters_avoided = (dft.encounters_avoided or 0) + 1
+        dft.stats_ambushes = math.max((dft.stats_ambushes or 0) - 1, 0)
 
         dft_award_scouting_xp(15)
         return false
     end
 
-    tlra_log("STEALTH FAILURE: Failed to dodge encounter. Roll: %d > Chance: %d", roll, total_chance)
-    dft_dbg_sneak_summary(tlra.travel_mode == "sneaky", roll, total_chance, false)
-    tlra.ambush_targets = targets
+    dft_log("STEALTH FAILURE: Failed to dodge encounter. Roll: %d > Chance: %d", roll, total_chance)
+    dft_dbg_sneak_summary(dft.travel_mode == "sneaky", roll, total_chance, false)
+    dft.ambush_targets = targets
     return true
 end
 function apply_final_stats()
-    local cfg = tlra.active_config
+    local cfg = dft.active_config
     if not (cfg and db.actor) then return end
 
-    local hours = (tlra.expected_duration or 1) / 60.0
+    local hours = (dft.expected_duration or 1) / 60.0
     if hours <= 0 then return end
 
     local mult = (cfg.resource_cost_mult or 1) * dft_get_scouting_resource_mult()
-    local drain = RESOURCE_RATE_PER_HR * hours * mult
+    local drain = TRAVEL.resource_rate_per_hr * hours * mult
 
     if db.actor.change_hunger then db.actor:change_hunger(-drain) end
     if db.actor.change_thirst then db.actor:change_thirst(-drain) end
     if db.actor.change_sleepiness then db.actor:change_sleepiness(-drain) end
 
-    tlra_log("Survival drain: %.3f/stat over %.2fh (scouting x%.2f, mcm x%.1f)", drain, hours, dft_get_scouting_resource_mult(), cfg.resource_cost_mult or 1)
+    dft_log("Survival drain: %.3f/stat over %.2fh (scouting x%.2f, mcm x%.1f)", drain, hours, dft_get_scouting_resource_mult(), cfg.resource_cost_mult or 1)
 end
 
 function stop_travel_logic()
-    tlra.is_traveling = false
-    -- Weapon restore is handled by the delayed arrival/abort events
-    -- to ensure the actor is already at their final position.
+    dft.is_traveling = false
 end
 
 function cleanup_dots()
-    for _, id in pairs(tlra.dot_ids) do
+    for _, id in pairs(dft.dot_ids) do
+        dft_remove_path_spots(id)
         pcall(function()
             if level.map_has_object_spot(id, "primary_object") ~= 0 then
                 level.map_remove_object_spot(id, "primary_object")
@@ -3355,7 +4590,9 @@ function cleanup_dots()
         local obj = alife_object(id)
         if obj then pcall(alife_release, obj) end
     end
-    tlra.dot_ids = {}
+    dft.dot_ids = {}
+    dft.dot_done = {}
+    dft.dot_path_ratio = {}
 end
 
 function purge_orphan_dots()
@@ -3371,8 +4608,13 @@ function purge_orphan_dots()
                 pcall(function()
                     has_spot = (level.map_has_object_spot(obj.id, "primary_object") ~= 0)
                             or (level.map_has_object_spot(obj.id, "green_location") ~= 0)
+                            or (level.map_has_object_spot(obj.id, PATH.dot_spot) ~= 0)
+                            or (level.map_has_object_spot(obj.id, PATH.dot_spot_pending) ~= 0)
+                            or (level.map_has_object_spot(obj.id, PATH.dot_spot_debug_vertex) ~= 0)
+                            or (level.map_has_object_spot(obj.id, PATH.dot_spot_debug_edge) ~= 0)
                 end)
                 if has_spot then
+                    dft_remove_path_spots(obj.id)
                     pcall(function() level.map_remove_object_spot(obj.id, "primary_object") end)
                     pcall(function() level.map_remove_object_spot(obj.id, "green_location") end)
                     pcall(alife_release, obj)
@@ -3382,17 +4624,17 @@ function purge_orphan_dots()
         end
     end
     if purged > 0 then
-        tlra_msg(string.format(tlra_str("tlra_msg_cleared_markers"), purged), 4)
+        dft_msg(string.format(dft_str("dft_msg_cleared_markers"), purged), 4)
     else
-        tlra_msg(tlra_str("tlra_msg_no_markers"), 3)
+        dft_msg(dft_str("dft_msg_no_markers"), 3)
     end
-    tlra_log(" purge_orphan_dots: %d removed", purged)
+    dft_log(" purge_orphan_dots: %d removed", purged)
 end
 
 function trigger_encounter()
     set_safety_active(60.0)
-    local pct   = math.floor(math.min(tlra.current_dist / tlra.travel_dist, 1.0) * 100)
-    local ratio = math.min(tlra.current_dist / tlra.travel_dist, 1.0)
+    local pct   = math.floor(math.min(dft.current_dist / dft.travel_dist, 1.0) * 100)
+    local ratio = math.min(dft.current_dist / dft.travel_dist, 1.0)
 
     -- Skip surges, wipe stats, then jump clock
     check_and_skip_surges()
@@ -3406,17 +4648,17 @@ function trigger_encounter()
         end
     end)
     -- Calculate safe encounter position BEFORE jumping time
-    tlra_log("!!! ENCOUNTER TRIGGERED at ratio %.2f - Start pos: %.1f %.1f %.1f", ratio, tlra.start_pos.x, tlra.start_pos.y, tlra.start_pos.z)
+    dft_log("!!! ENCOUNTER TRIGGERED at ratio %.2f - Start pos: %.1f %.1f %.1f", ratio, dft.start_pos.x, dft.start_pos.y, dft.start_pos.z)
     local encounter_pos = get_safe_lvid_pos(ratio)
     if not encounter_pos then
         encounter_pos = vector():set(
-            tlra.start_pos.x + (tlra.dest_pos.x - tlra.start_pos.x) * ratio,
-            tlra.start_pos.y + (tlra.dest_pos.y - tlra.start_pos.y) * ratio,
-            tlra.start_pos.z + (tlra.dest_pos.z - tlra.start_pos.z) * ratio
+            dft.start_pos.x + (dft.dest_pos.x - dft.start_pos.x) * ratio,
+            dft.start_pos.y + (dft.dest_pos.y - dft.start_pos.y) * ratio,
+            dft.start_pos.z + (dft.dest_pos.z - dft.start_pos.z) * ratio
         )
     end
     local safe_landing = get_safe_pos(encounter_pos)
-    local encounter_offset = get_config("encounter_offset") or 30
+    local encounter_offset = dft_get_encounter_offset()
     if encounter_offset > 0 then
         safe_landing = apply_travel_offset(safe_landing, encounter_offset)
     end
@@ -3429,9 +4671,9 @@ function trigger_encounter()
         teleport_companions(safe_landing, lvid, gvid)
     end
 
-    if tlra.ambush_targets then
-        dft_alert_ambushers(tlra.ambush_targets)
-        tlra.ambush_targets = nil
+    if dft.ambush_targets then
+        dft_alert_ambushers(dft.ambush_targets)
+        dft.ambush_targets = nil
     end
 
     advance_travel_time(ratio)
@@ -3445,24 +4687,24 @@ function trigger_encounter()
     local refund = process_refund(ratio)
 
     -- Single interruption message with progress and refund combined
-    local refund_str = (refund and refund > 0) and string.format(tlra_str("tlra_msg_ru_refunded"), refund) or ""
-    tlra_msg(string.format(tlra_str("tlra_msg_interrupted"), pct, refund_str), 5)
+    local refund_str = (refund and refund > 0) and string.format(dft_str("dft_msg_ru_refunded"), refund) or ""
+    dft_msg(string.format(dft_str("dft_msg_interrupted"), pct, refund_str), 5)
 
     cleanup_dots()
     stop_travel_logic()
-    tlra_clear()
+    dft_clear()
 
-    CreateTimeEvent("tlra", "safe_encounter", 1.3, function()
+    CreateTimeEvent("dft", "safe_encounter", 1.3, function()
         if not db.actor then return true end
         set_safety_active(60.0)
 
         -- Actor is already physically at safe_landing, just handle UI updates
         -- Delay weapon restore so engine finishes processing teleport hide_weapon
-        CreateTimeEvent("tlra", "encounter_weapon_restore", 0.5, function()
-            tlra_restore_weapons(true)
-            tlra.safety_until = 0
+        CreateTimeEvent("dft", "encounter_weapon_restore", 0.5, function()
+            dft_restore_weapons(true)
+            dft.safety_until = 0
             pcall(function() save_var(db.actor, "surge_immuned", false) end)
-            tlra_log(" Safety and surge immunity cleared on weapon restore (encounter).")
+            dft_log(" Safety and surge immunity cleared on weapon restore (encounter).")
             return true
         end)
         return true
