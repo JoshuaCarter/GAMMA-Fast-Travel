@@ -31,6 +31,7 @@ local dft_defaults = {
     dot_ids             = {},
     dot_path_ratio      = {},
     dot_done            = {},
+    pending_dot_cleanup = nil, -- dot object IDs snapshotted at save time, released after load
     path_preview_id     = nil,
     is_path_preview     = false,
     menu_open_seq       = 0,
@@ -53,9 +54,12 @@ local dft_defaults = {
     graph_cache_level   = nil,
     graph_cache_name    = nil,
     menu_resolve_cache  = nil,  -- { seq, id, ln, target, err } — one resolve per map menu open
-    menu_path_cache     = nil,  -- { seq, id, chain, is_vertex, path_len } — one path build per menu open
+    menu_path_cache     = nil,  -- { seq, id, chain, is_vertex, path_len, raw_chain } — one path build per menu open
     encumbrance_time_mult = 1.0,
     encumbrance_speed_mult = 1.0,
+    path_chain          = nil, -- polyline (vector list) for the active journey; authoritative for
+                                -- display dots, ambush ratio->position, and interrupt teleports.
+    path_chain_is_vertex = nil,
 }
 _G.dft = _G.dft or {}
 for key, value in pairs(dft_defaults) do
@@ -75,8 +79,8 @@ _G.dft_travel = {
     sneak_dodge_base     = 25,  -- ambush dodge at Sneaking Lv 0 (sneak mode only)
     sneak_dodge_per_lvl  = 3,
     sneak_dodge_cap      = 85,
-    sneak_xp_dodge       = 15,  -- XP when dodging an ambush during sneak travel
-    sneak_xp_ambush      = 5,   -- XP when caught in an ambush during sneak travel
+    sneak_xp_dodge       = 20,  -- XP when dodging an ambush during sneak travel
+    sneak_xp_ambush      = 10,  -- XP when caught in an ambush during sneak travel
     min_per_km           = 30,  -- normal travel: 30 game minutes per km
     sneak_min_per_km     = 180, -- sneak Lv0: 3 hours per km
     sneak_min_per_lvl    = 5,   -- sneak: -5 min/km per Sneaking level
@@ -140,16 +144,35 @@ _G.dft_path = {
     dot_spot_debug_edge   = "dft_path_debug_edge",
     dot_max_count         = 1000,
     dot_spacing_m         = 20,  -- journey dots every 20m along generated path
-    step_m                = 20,  -- advance exactly this far toward dest before each snap search
-    road_snap_m           = 19,  -- road node search radius around forward sample (must be < step_m)
-    max_step_jump_m       = 20,  -- max distance between consecutive path points (nav/raw only)
+    dot_underground_offset_m = 100, -- bury the carrier device_pda this far below its dot's
+                                     -- real y so it's never visible/reachable in the 3D world -
+                                     -- map spots only care about x/z, so this doesn't affect them.
     road_on_graph_max_m   = 5,   -- navmesh counts as on-road when this close to a graph node
-    max_path_steps        = 500,
-    path_stall_min_m      = 1.0, -- min progress per step; road snap repeats break here
     preview_edge_spacing_m = 5,
     lc_snap_max_drift_m   = 25,  -- max navmesh snap distance from level changer
     ground_snap_max_drift_m = 60,
     graph_nearest_max_m   = 50,  -- tight graph lookup for transitions
+
+    -- Navmesh A* pathfinder (dft_astar_navmesh_path). Walks level.vertex_in_direction,
+    -- the same mesh-constrained stepping primitive the engine's AI uses, so every hop is
+    -- guaranteed to stay on walkable ground (no underground/void jumps).
+    nav_step_m            = 18,   -- horizontal distance per mesh-walk hop
+    nav_max_nodes         = 1500, -- hard cap on expanded search nodes (perf safety)
+    nav_goal_tol_m        = 12,   -- close enough to destination vertex to stop searching
+    nav_dir_count         = 10,   -- direction fan size per node expansion (relative to goal bearing)
+    -- Roads are strongly preferred, but only when a road hop still nets closer to the
+    -- destination afterward (see the "progressing" check in dft_astar_navmesh_path) - a
+    -- road that leads away/sideways gets no discount, so the search won't detour onto it.
+    nav_road_cost_mult    = 0.15, -- cost multiplier for progressing hops near a road vertex
+    nav_road_seek_m       = 45,   -- search radius for the "hop straight at nearest road node" candidate
+    nav_min_move_frac     = 0.35, -- min fraction of intended hop distance to count as unobstructed
+    nav_min_move_abs_m    = 1.2,  -- absolute floor (m) - whichever of this or the fraction is smaller wins,
+                                   -- so short real progress near walls/corners isn't thrown away just because
+                                   -- it's a small % of a long requested hop (see dft_mesh_step_ok in 05_path)
+    nav_heuristic_weight  = 1.05, -- >1 = faster/greedier search, still near-optimal
+    nav_smooth_step_m     = 15,   -- hop size used while validating shortcut line-of-sight
+    nav_smooth_tolerance_m = 3,   -- allowed endpoint drift when validating a shortcut
+    nav_incomplete_gap_mult = 2.5, -- reject partial A* results if final gap > nav_step_m * this
 }
 
 _G.dft_path.dots = {

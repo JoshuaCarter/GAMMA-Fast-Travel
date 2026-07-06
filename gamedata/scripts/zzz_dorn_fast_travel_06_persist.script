@@ -87,10 +87,13 @@ function dft_clear()
     dft.emission_interrupt_pending = false
     dft.dot_count = 0
     pcall(dft_cleanup_dots)  -- prevent alife dot leaks
+    dft.path_chain = nil
+    dft.path_chain_is_vertex = nil
     dft.dot_positions = {}
     dft.dot_ids = {}
     dft.dot_done = {}
     dft.dot_path_ratio = {}
+    dft.pending_dot_cleanup = nil
     dft.is_path_preview = false
     dft.path_preview_id = nil
     dft.last_encounter_check = 0
@@ -136,9 +139,33 @@ function dft_load()
            load_var(db.actor, dft_save_vars.final_lvid, 0)
 end
 
+-- Snapshot whatever dot PDA object IDs are live at the moment of any real save (fired via
+-- the "save_state" callback on every save, not just cross-level journey saves - a player can
+-- quicksave mid-journey on the same map too, where dft_save()/save_var() are never touched).
+-- The dots themselves are real alife objects and get saved by the engine regardless of our
+-- own bookkeeping; dft.dot_ids is a plain in-memory table that resets to empty on load, so
+-- without this the next session has no way to know those specific objects were ours to clean.
+function dft_persist_dots(m_data)
+    if not (dft.dot_ids and next(dft.dot_ids)) then return end
+    local snapshot = {}
+    for k, v in pairs(dft.dot_ids) do snapshot[k] = v end
+    m_data.dft_pending_dot_ids = snapshot
+end
+
+-- Stashes the snapshot for actor_on_first_update's orphan sweep to release once level/alife
+-- APIs are actually ready - load_state fires too early in the load sequence to safely touch
+-- map spots or alife_release.
+function dft_restore_dots(m_data)
+    if m_data and m_data.dft_pending_dot_ids and next(m_data.dft_pending_dot_ids) then
+        dft.pending_dot_cleanup = m_data.dft_pending_dot_ids
+    end
+end
+
 -- dft_publish_to_global
 do
     _G.dft_save = dft_save
     _G.dft_clear = dft_clear
     _G.dft_load = dft_load
+    _G.dft_persist_dots = dft_persist_dots
+    _G.dft_restore_dots = dft_restore_dots
 end

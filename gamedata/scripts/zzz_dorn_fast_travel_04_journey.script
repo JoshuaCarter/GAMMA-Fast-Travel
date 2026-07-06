@@ -457,6 +457,12 @@ function dft_calc_guide_cost(dist)
     return math.floor((dist / 1000) * dft_guide_cost_per_km)
 end
 
+-- Guide travel is no longer instant: 1 game-hour per straight-line PDA km, same distance the
+-- fee is based on. Floored at a minute so a very short hop still ticks the clock forward.
+function dft_calc_guide_duration_secs(dist)
+    return math.max(60, (dist / 1000) * 3600)
+end
+
 function dft_guide_distance(dest_pos, dest_obj, id)
     if dest_obj and not dest_pos then
         dest_pos = dft_object_position(dest_obj, id)
@@ -497,10 +503,12 @@ function dft_do_guide_travel(id, ln)
     local lvid = target.lvid
     local gvid = target.gvid
 
-    -- Instant guide travel: money only - no journey, ambush, or survival drain
+    -- Guide travel: no journey/ambush/survival drain, but the clock still moves - 1hr per
+    -- straight-line PDA km, same distance the fee is based on.
     local mapchange = dft_is_cross_zone_destination(obj, ln)
     local dist = dft_guide_distance(pos, obj, id)
     local cost = dft_calc_guide_cost(dist)
+    local duration_secs = dft_calc_guide_duration_secs(dist)
     if cost > 0 and db.actor:money() < cost then
         dft_msg(string.format(dft_str("dft_msg_cannot_afford"), tostring(cost)), "warning")
         return false
@@ -530,6 +538,7 @@ function dft_do_guide_travel(id, ln)
 
     dft_set_safety_active(60.0)
     dft_check_and_skip_surges()
+    dft_advance_travel_time_seconds(duration_secs)
 
     if mapchange then
         ChangeLevel(arrival, lvid, gvid, VEC_Z, true)
@@ -543,7 +552,8 @@ function dft_do_guide_travel(id, ln)
         return true
     end)
 
-    dft_log("Guide travel complete | dist %.0f | cost %d | mapchange %s", dist, cost, tostring(mapchange))
+    dft_log("Guide travel complete | dist %.0f | cost %d | duration %ds | mapchange %s",
+        dist, cost, math.floor(duration_secs), tostring(mapchange))
     return true
 end
 
@@ -590,6 +600,7 @@ do
     _G.dft_format_travel_menu = dft_format_travel_menu
     _G.dft_get_game_difficulty = dft_get_game_difficulty
     _G.dft_calc_guide_cost = dft_calc_guide_cost
+    _G.dft_calc_guide_duration_secs = dft_calc_guide_duration_secs
     _G.dft_guide_distance = dft_guide_distance
     _G.dft_do_guide_travel = dft_do_guide_travel
 end

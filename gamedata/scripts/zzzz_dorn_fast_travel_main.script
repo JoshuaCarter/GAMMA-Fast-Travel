@@ -155,6 +155,8 @@ function on_game_start()
         RegisterScriptCallback("on_before_fast_travel",        dft_block_fft_travel)
         RegisterScriptCallback("save_state",                 dft_on_save_state)
         RegisterScriptCallback("load_state",                 dft_on_load_state)
+        RegisterScriptCallback("save_state",                 dft_persist_dots)
+        RegisterScriptCallback("load_state",                 dft_restore_dots)
         dft_log(" Callbacks registered.")
         dft_log("session start | debug_log=%s", tostring(dft_config.debug_log))
 
@@ -231,10 +233,35 @@ function actor_on_first_update()
         return true
     end)
 
-    -- Silent orphan sweep 3s after load to catch dots stuck from previous session
+    -- Silent orphan sweep 3s after load to catch dots stuck from previous session.
+    -- include_path_spots=true is required here - our journey/preview dots use the
+    -- dft_path_dot* spot names, not primary_object/green_location, so without this
+    -- the sweep silently never matched the very dots it exists to clean up.
     CreateTimeEvent("dft", "orphan_sweep", 3.0, function()
         if not (db.actor and alife() and not dft.is_traveling) then return true end
-        local purged = dft_purge_stuck_dot_pdas(false)
+        local purged = dft_purge_stuck_dot_pdas(true)
+
+        -- Precise cleanup: release the exact dot IDs snapshotted at whatever save
+        -- produced this load (see dft_persist_dots), regardless of whether the pattern
+        -- scan above would have caught them (e.g. a spot-add that failed silently).
+        if dft.pending_dot_cleanup then
+            for _, obj_id in pairs(dft.pending_dot_cleanup) do
+                pcall(function()
+                    dft_remove_path_spots(obj_id)
+                    if level.map_has_object_spot(obj_id, "primary_object") ~= 0 then
+                        level.map_remove_object_spot(obj_id, "primary_object")
+                    end
+                    if level.map_has_object_spot(obj_id, "green_location") ~= 0 then
+                        level.map_remove_object_spot(obj_id, "green_location")
+                    end
+                    local obj = alife_object(obj_id)
+                    if obj then alife_release(obj) end
+                end)
+                purged = purged + 1
+            end
+            dft.pending_dot_cleanup = nil
+        end
+
         if purged > 0 then
             dft_log(" Auto orphan sweep: removed %d stuck dot(s)", purged)
         end
@@ -375,9 +402,10 @@ function dft_add_guide_menu_item(pui, id, se_obj)
     local dist = dft_guide_distance(nil, se_obj, id)
     local guide_text = dft_str("dft_menu_hire_guide")
     local guide_cost = dft_calc_guide_cost(dist)
+    local dur_str = dft_format_duration(dft_calc_guide_duration_secs(dist) / 60)
     local cost_str = (guide_cost > 0) and string.format(dft_str("dft_ru_amount"), guide_cost) or dft_str("dft_menu_free")
-    pui:AddItem(string.format(dft_str("dft_menu_guide_format"), guide_text, cost_str))
-    dft_log("menu: guide id=%s cost=%d dist=%.0f", tostring(id), guide_cost, dist)
+    pui:AddItem(string.format(dft_str("dft_menu_guide_format"), guide_text, dur_str, cost_str))
+    dft_log("menu: guide id=%s cost=%d dist=%.0f dur=%s", tostring(id), guide_cost, dist, dur_str)
 end
 
 function dft_add_travel_menu_items(pui, id, is_lc, include_sneak)
@@ -478,7 +506,7 @@ on_map_spot_menu_add_property_impl = function(pui, id, ln, hint)
         return true
     end
 
-    local is_lc = dft_is_pda_transition(id)
+    local is_lc = dft_is_pda_transition(id, se_obj)
     local is_campfire = dft_is_campfire(id, se_obj)
     local is_base = dft_is_base(id, se_obj)
     local is_stash = dft_is_player_stash(id, se_obj)
@@ -496,7 +524,7 @@ on_map_spot_menu_add_property_impl = function(pui, id, ln, hint)
     local function resolve_base_or_campfire()
         local target, terr = dft_resolve_travel_target(id, ln, click_pos)
         if not target then
-            target = dft_fallback_travel_target(id, se_obj)
+            target = dft_fallback_travel_target(id, se_obj, dft_object_on_actor_level(se_obj, ln))
             if target then
                 dft_log("menu: fallback target id=%s (was %s)", tostring(id), tostring(terr))
             elseif terr then
@@ -598,11 +626,11 @@ function on_map_spot_menu_property_clicked(pui, id, ln, t)
         id = dft.last_menu_target_id or id
         ln = dft.last_menu_target_ln or ln
         local se_click = alife_object(id)
-        local is_lc = dft_is_pda_transition(id)
+        local is_lc = dft_is_pda_transition(id, se_click)
 
         local target, terr = dft_resolve_travel_target(id, ln, dft.last_map_click_pos)
         if not target and not is_lc then
-            target = dft_fallback_travel_target(id, se_click)
+            target = dft_fallback_travel_target(id, se_click, dft_object_on_actor_level(se_click, ln))
         end
         if not target then
             dft_log_error("menu click: no target for id=%s err=%s", tostring(id), tostring(terr))
@@ -622,7 +650,7 @@ function on_map_spot_menu_property_clicked(pui, id, ln, t)
             dft.final_lvid = lvid
             dft_start_travel_sequence(pos, lvid, gvid, is_lc, gvid)
         elseif string.find(result, dft_str("dft_menu_hire_guide"), 1, true) then
-            dft_log("Hiring guide (instant travel)...")
+            dft_log("Hiring guide...")
             dft_do_guide_travel(id, ln)
         end
     end, debug.traceback)

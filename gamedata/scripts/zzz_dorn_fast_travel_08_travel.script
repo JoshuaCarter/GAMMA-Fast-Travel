@@ -333,7 +333,10 @@ function dft_trigger_emission_interrupt()
             dft.start_pos.z + (dft.dest_pos.z - dft.start_pos.z) * ratio
         )
     end
-    local safe_landing, safe_lvid = dft_find_ground_pos(interrupt_pos, nil, dft.dest_gvid)
+    local safe_landing, safe_lvid = dft_find_ground_pos(interrupt_pos, nil, dft.dest_gvid, {
+        anchor = interrupt_pos,
+        max_drift_m = dft_path.ground_snap_max_drift_m or 60,
+    })
     local lvid = safe_lvid or dft_resolve_lvid_for_pos(safe_landing, nil, dft.dest_gvid)
     if not lvid and safe_landing and level and level.vertex_id then
         local ok, lv = pcall(function() return level.vertex_id(safe_landing) end)
@@ -528,8 +531,14 @@ function dft_actor_on_update()
         dft.last_encounter_check = tg
 
         local cur_ratio = math.min(dft.current_dist / dft.travel_dist, 1.0)
-        local virtual_pos = vector()
-        dft_lerp_pos(dft.start_pos, dft.dest_pos, cur_ratio, virtual_pos)
+        -- Reads the same polyline used for the displayed path/dots, so the ambush scan
+        -- point matches where the player actually appears to be walking (not a straight
+        -- line through terrain the path itself detours around).
+        local virtual_pos = dft_get_safe_lvid_pos(cur_ratio)
+        if not virtual_pos then
+            virtual_pos = vector()
+            dft_lerp_pos(dft.start_pos, dft.dest_pos, cur_ratio, virtual_pos)
+        end
 
         if dft_detect_ambush(virtual_pos) then
             dft_trigger_encounter()
@@ -681,7 +690,7 @@ function dft_complete_travel_sequence()
                     }
                     dft_msg(dft_journey_result_message(ambush_opts), dft_journey_result_style(ambush_opts))
                     if dft.travel_mode == "sneaky" then
-                        dft_award_sneaking_xp((_G.dft_travel and _G.dft_travel.sneak_xp_ambush) or 5)
+                        dft_award_sneaking_xp((_G.dft_travel and _G.dft_travel.sneak_xp_ambush) or 10)
                     end
                 else
                     local arrive_opts = {
@@ -696,10 +705,6 @@ function dft_complete_travel_sequence()
                 dft_dbg(0, string.format("Arrived %.0fm | %s", dft.travel_dist, dft_format_duration(dft.expected_duration or 1)), "cyan")
                 dft_dbg(1, string.format("Avoided %d encounter(s)", dft.encounters_avoided or 0), "green")
                 dft_dbg(2, string.format("Sneak %d%% | Sneaking Lv%d", dft_calc_sneak_chance(dft.travel_mode == "sneaky"), dft_get_sneaking_level()), nil)
-
-                if dft.travel_mode == "sneaky" then
-                    dft_award_sneaking_xp(math.max(1, math.floor(dft.travel_dist / 50)))
-                end
 
                 dft_clear()
             end
@@ -780,7 +785,7 @@ function dft_detect_ambush(virtual_pos)
         dft.encounters_avoided = (dft.encounters_avoided or 0) + 1
         dft.stats_ambushes = math.max((dft.stats_ambushes or 0) - 1, 0)
 
-        dft_award_sneaking_xp((_G.dft_travel and _G.dft_travel.sneak_xp_dodge) or 15)
+        dft_award_sneaking_xp((_G.dft_travel and _G.dft_travel.sneak_xp_dodge) or 20)
         return false
     end
 
@@ -858,7 +863,10 @@ function dft_trigger_encounter()
             dft.start_pos.z + (dft.dest_pos.z - dft.start_pos.z) * ratio
         )
     end
-    local safe_landing, safe_lvid = dft_find_ground_pos(encounter_pos, nil, dft.dest_gvid)
+    local safe_landing, safe_lvid = dft_find_ground_pos(encounter_pos, nil, dft.dest_gvid, {
+        anchor = encounter_pos,
+        max_drift_m = dft_path.ground_snap_max_drift_m or 60,
+    })
     local encounter_offset = dft_get_encounter_offset()
     if encounter_offset > 0 then
         safe_landing = dft_apply_travel_offset(safe_landing, encounter_offset)
@@ -897,7 +905,7 @@ function dft_trigger_encounter()
         }
         dft_msg(dft_journey_result_message(ambush_opts), dft_journey_result_style(ambush_opts))
         if dft.travel_mode == "sneaky" then
-            dft_award_sneaking_xp((_G.dft_travel and _G.dft_travel.sneak_xp_ambush) or 5)
+            dft_award_sneaking_xp((_G.dft_travel and _G.dft_travel.sneak_xp_ambush) or 10)
         end
 
         dft_cleanup_dots()

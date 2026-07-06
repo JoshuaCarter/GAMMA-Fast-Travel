@@ -40,8 +40,27 @@ function dft_get_level_changer_spot(id)
     return nil
 end
 
-function dft_is_pda_transition(id)
-    return dft_get_level_changer_spot(id) ~= nil
+-- Scripted transitions (space_restrictor/script_restr with an [sr_level_changer] spawn-ini
+-- section) don't get one of the engine's auto-assigned green-arrow spots - they usually show
+-- up with a generic "primary_object" spot and a custom hint/name instead. Without this check
+-- those PDA markers fell through every category (not lc/base/campfire/stash) and the menu
+-- silently added nothing at all, even though they're a real, valid transition.
+function dft_is_scripted_lc_restrictor(id, se_obj)
+    if not se_obj then se_obj = alife_object(id) end
+    if not se_obj then return false end
+    local cls = 0
+    local ok_c = pcall(function() cls = se_obj:clsid() end)
+    if not ok_c then return false end
+    if cls ~= clsid.script_restr and cls ~= clsid.space_restrictor then return false end
+    local ok_i, ini = pcall(function() return se_obj:spawn_ini() end)
+    if not (ok_i and ini) then return false end
+    local ok_s, exists = pcall(function() return ini:section_exist("sr_level_changer") end)
+    return ok_s and exists or false
+end
+
+function dft_is_pda_transition(id, se_obj)
+    if dft_get_level_changer_spot(id) ~= nil then return true end
+    return dft_is_scripted_lc_restrictor(id, se_obj)
 end
 
 function dft_is_level_changer_spot(id)
@@ -246,7 +265,8 @@ function dft_log_menu_diag(id, se_obj, ln, hint)
     local lc_spot = dft_get_level_changer_spot(id)
     local spots = dft_collect_object_spots(id)
     local spots_str = (#spots > 0) and table.concat(spots, ",") or "none"
-    local dest = lc_spot and dft_read_transition_dest_info(se_obj) or nil
+    local is_scripted_lc = dft_is_scripted_lc_restrictor(id, se_obj)
+    local dest = (lc_spot or is_scripted_lc) and dft_read_transition_dest_info(se_obj) or nil
     local dest_str = "n/a"
     if dest then
         if dest.dest_level then
@@ -259,12 +279,12 @@ function dft_log_menu_diag(id, se_obj, ln, hint)
         end
     end
     dft_log(
-        "menu-diag: hint=%s | id=%s ln=%s cur=%s | cls=%s sec=%s name=%s | clicked_lc=%s all_spots=[%s] trans_dest=%s | pda_trans=%s campfire=%s base=%s stash=%s",
+        "menu-diag: hint=%s | id=%s ln=%s cur=%s | cls=%s sec=%s name=%s | clicked_lc=%s scripted_lc=%s all_spots=[%s] trans_dest=%s | pda_trans=%s campfire=%s base=%s stash=%s",
         tostring(hint or "none"),
         tostring(id), tostring(ln), tostring(level and level.name and level.name()),
         tostring(cls), tostring(sec), tostring(name),
-        tostring(lc_spot or "none"), spots_str, dest_str,
-        tostring(dft_is_pda_transition(id)),
+        tostring(lc_spot or "none"), tostring(is_scripted_lc), spots_str, dest_str,
+        tostring(dft_is_pda_transition(id, se_obj)),
         tostring(dft_is_campfire(id, se_obj)),
         tostring(dft_is_base(id, se_obj)),
         tostring(dft_is_player_stash(id, se_obj))
@@ -527,7 +547,12 @@ function dft_distance_to_object(se_obj, id)
 end
 
 
-function dft_fallback_travel_target(id, se_obj)
+-- level.vertex_id/level.vertex_position only understand the currently loaded level's own
+-- navmesh - calling them with a position from a different (unloaded) level returns a bogus
+-- vertex on THIS level that happens to share coordinates, which is how cross-zone guide
+-- travel used to land players underground. Only trust level.* lookups when the target is
+-- actually on the level the actor is standing on right now.
+function dft_fallback_travel_target(id, se_obj, on_actor_level)
     if not se_obj then se_obj = alife_object(id) end
     if not se_obj then return nil end
     local pos = dft_object_position(se_obj, id)
@@ -535,7 +560,7 @@ function dft_fallback_travel_target(id, se_obj)
 
     local lvid = se_obj.m_level_vertex_id
     local gvid = se_obj.m_game_vertex_id
-    if level and level.vertex_id then
+    if on_actor_level and level and level.vertex_id then
         local ok, lv = pcall(function() return level.vertex_id(pos) end)
         if ok and lv and lv ~= dft_invalid_lvid then lvid = lv end
     end
@@ -564,7 +589,7 @@ local function dft_resolve_travel_target_impl(id, ln, click_pos)
     if not se_obj then return nil, "no_object" end
 
     local on_actor_level = dft_object_on_actor_level(se_obj, ln)
-    local is_lc = dft_is_pda_transition(id)
+    local is_lc = dft_is_pda_transition(id, se_obj)
 
     if is_lc then
         if not dft_object_on_loaded_level(se_obj) then
@@ -665,7 +690,7 @@ local function dft_resolve_travel_target_impl(id, ln, click_pos)
         pos = dft_pos_copy(dft_object_position(se_obj, id))
     end
     if not pos then
-        return dft_fallback_travel_target(id, se_obj), nil
+        return dft_fallback_travel_target(id, se_obj, on_actor_level), nil
     end
 
     if not on_actor_level then
@@ -692,7 +717,7 @@ local function dft_resolve_travel_target_impl(id, ln, click_pos)
         local near = dft_graph_nearest_gvid(pos, dft_travel_max_alife_graph_drift)
         if near and near ~= dft_invalid_gvid then gvid = near end
         if not (gvid and gvid ~= dft_invalid_gvid) then
-            return dft_fallback_travel_target(id, se_obj), nil
+            return dft_fallback_travel_target(id, se_obj, on_actor_level), nil
         end
     end
     local gg = game_graph()
@@ -702,10 +727,10 @@ local function dft_resolve_travel_target_impl(id, ln, click_pos)
             if ok and near and gg.valid_vertex_id and gg:valid_vertex_id(near) then
                 gvid = near
             else
-                return dft_fallback_travel_target(id, se_obj), nil
+                return dft_fallback_travel_target(id, se_obj, on_actor_level), nil
             end
         else
-            return dft_fallback_travel_target(id, se_obj), nil
+            return dft_fallback_travel_target(id, se_obj, on_actor_level), nil
         end
     end
 
@@ -762,13 +787,22 @@ local function dft_resolve_travel_target_impl(id, ln, click_pos)
             lvid = graph_check.lvid
         elseif se_obj.m_level_vertex_id and se_obj.m_level_vertex_id ~= dft_invalid_lvid then
             lvid = se_obj.m_level_vertex_id
-        elseif level and level.vertex_id then
+        elseif on_actor_level and level and level.vertex_id then
             local ok, lv = pcall(function() return level.vertex_id(pos) end)
             if ok and lv and lv ~= dft_invalid_lvid then lvid = lv end
         end
     end
 
-    local snap_pos, snap_lvid = dft_find_ground_pos(pos, lvid, gvid)
+    -- level.* navmesh snapping only means anything on the level actually loaded right now.
+    -- Cross-zone targets already have a trustworthy position/lvid straight from the game
+    -- graph (dft_graph_vertex_target) or the object's own alife record - exactly like level
+    -- changers trust their native dest_position instead of re-deriving one. Running it
+    -- through dft_find_ground_pos anyway (using the WRONG level's navmesh) is what used to
+    -- occasionally land guide travel underground on the destination map.
+    local snap_pos, snap_lvid = pos, lvid
+    if on_actor_level then
+        snap_pos, snap_lvid = dft_find_ground_pos(pos, lvid, gvid)
+    end
     return { pos = snap_pos, lvid = snap_lvid or lvid, gvid = gvid, se_obj = se_obj }, nil
 end
 
@@ -792,6 +826,7 @@ do
     _G.dft_map_has_any_spot = dft_map_has_any_spot
     _G.dft_get_level_changer_spot = dft_get_level_changer_spot
     _G.dft_is_pda_transition = dft_is_pda_transition
+    _G.dft_is_scripted_lc_restrictor = dft_is_scripted_lc_restrictor
     _G.dft_is_level_changer_spot = dft_is_level_changer_spot
     _G.dft_read_transition_dest_info = dft_read_transition_dest_info
     _G.dft_is_in_door_registry = dft_is_in_door_registry

@@ -10,7 +10,7 @@
 		<text>Cancel journey</text>
 	</string>
 	<string id="dft_menu_hire_guide">
-		<text>Hire guide (instant)</text>
+		<text>Hire guide</text>
 	</string>
 	<string id="dft_menu_free">
 		<text>Free</text>
@@ -19,7 +19,7 @@
 		<text>%s (%s, %s, %d%% sneak)</text>
 	</string>
 	<string id="dft_menu_guide_format">
-		<text>%s [%s]</text>
+		<text>%s (%s, %s)</text>
 	</string>
 	<string id="dft_ru_amount">
 		<text>%d RU</text>
