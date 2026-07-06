@@ -680,6 +680,9 @@ function dft_complete_travel_sequence()
                         enemy_dist_m = dft_nearest_hostile_dist_m(final_pos, arrival_targets) or dft.arrival_short_m or 0,
                     }
                     dft_msg(dft_journey_result_message(ambush_opts), dft_journey_result_style(ambush_opts))
+                    if dft.travel_mode == "sneaky" then
+                        dft_award_sneaking_xp((_G.dft_travel and _G.dft_travel.sneak_xp_ambush) or 5)
+                    end
                 else
                     local arrive_opts = {
                         outcome = "arrived",
@@ -777,7 +780,7 @@ function dft_detect_ambush(virtual_pos)
         dft.encounters_avoided = (dft.encounters_avoided or 0) + 1
         dft.stats_ambushes = math.max((dft.stats_ambushes or 0) - 1, 0)
 
-        dft_award_sneaking_xp(15)
+        dft_award_sneaking_xp((_G.dft_travel and _G.dft_travel.sneak_xp_dodge) or 15)
         return false
     end
 
@@ -893,6 +896,9 @@ function dft_trigger_encounter()
             enemy_dist_m = enemy_dist_m or 0,
         }
         dft_msg(dft_journey_result_message(ambush_opts), dft_journey_result_style(ambush_opts))
+        if dft.travel_mode == "sneaky" then
+            dft_award_sneaking_xp((_G.dft_travel and _G.dft_travel.sneak_xp_ambush) or 5)
+        end
 
         dft_cleanup_dots()
         dft_stop_travel_logic()
