@@ -1,0 +1,560 @@
+-- Dorn's Fast Travel: Zone BFS, door finder, travel time advance.
+-- Loaded automatically before zzzz_dorn_fast_travel_main.script
+
+-- ============================================================
+-- 3. Routing Engine (BFS + Curated Table)
+-- ============================================================
+-- Shared dft globals (Anomaly isolates zzz_* script environments)
+local dft = _G.dft
+local dft_config = _G.dft_config
+local NORTH_ZONES = {
+    l10_radar      = true,
+    l10_red_forest = true,
+    l11_pripyat    = true,
+    pripyat        = true,
+    l12_stancia    = true,
+    l12_stancia_2  = true,
+    l13_generators = true,
+    jupiter        = true,
+    zaton          = true,
+    limansk        = true,
+    l11_hospital   = true,
+}
+
+function dft_is_zone_blocked(name)
+    if not name then return false end
+    if NORTH_ZONES[name] then
+        if not has_alife_info("bar_deactivate_radar_done") then
+            dft_log(" Zone %s blocked (Brain Scorcher active)", name)
+            return true
+        end
+    end
+    return false
+end
+
+function dft_find_zone_path(src, dst)
+    if src == dst then return {src} end
+
+    -- Phase 1: Try finding a path using purely dynamically scanned transitions (100% physically accurate)
+    if dft.dynamic_map and dft.dynamic_map[src] then
+        local queue   = {{src}}
+        local visited = {[src] = true}
+        while #queue > 0 do
+            local path = table.remove(queue, 1)
+            local node = path[#path]
+
+            local seen = {}
+            if dft.dynamic_map[node] then
+                for nb, _ in pairs(dft.dynamic_map[node]) do seen[nb] = true end
+            end
+
+            for nb, _ in pairs(seen) do
+                if not visited[nb] and not dft_is_zone_blocked(nb) then
+                    visited[nb] = true
+                    local p = {unpack(path)}
+                    table.insert(p, nb)
+                    if nb == dst then
+                        dft_log(" BFS: Pure dynamic path found: %s", table.concat(p, " -> "))
+                        return p
+                    end
+                    table.insert(queue, p)
+                end
+            end
+        end
+    end
+
+    -- Phase 2: Fallback to merged static + dynamic map if pure dynamic path is not found
+    dft_log(" BFS: Pure dynamic path not found, falling back to static-integrated BFS")
+    local queue   = {{src}}
+    local visited = {[src] = true}
+    while #queue > 0 do
+        local path = table.remove(queue, 1)
+        local node = path[#path]
+
+        local seen = {}
+        for _, nb in ipairs(dft_static_zone_map[node] or {}) do seen[nb] = true end
+        if dft.dynamic_map and dft.dynamic_map[node] then
+            for nb, _ in pairs(dft.dynamic_map[node]) do seen[nb] = true end
+        end
+
+        for nb, _ in pairs(seen) do
+            if not visited[nb] and not dft_is_zone_blocked(nb) then
+                visited[nb] = true
+                local p = {unpack(path)}
+                table.insert(p, nb)
+                if nb == dst then return p end
+                table.insert(queue, p)
+            end
+        end
+    end
+    return nil
+end
+
+
+-- Snap a level-changer object's position to a safe navmesh point near its anchor.
+-- Uses small local offsets only; rejects snaps that drift too far (wrong navmesh island).
+dft_snap_door_pos = function(obj, anchor_pos, max_drift_m)
+    if not obj then return nil end
+    max_drift_m = max_drift_m or (_G.dft_path and _G.dft_path.lc_snap_max_drift_m) or 25
+    anchor_pos = anchor_pos or obj.position
+    if not (anchor_pos and anchor_pos.x) then return nil end
+    local base = vector():set(anchor_pos.x, anchor_pos.y, anchor_pos.z)
+
+    local function try_snap_at(test_pos)
+        if not level then return nil end
+        local ok, lvid = pcall(function() return level.vertex_id(test_pos) end)
+        if not ok or not lvid or lvid == 4294967295 or lvid == -1 then return nil end
+        local ok2, snapped = pcall(function() return level.vertex_position(lvid) end)
+        if not (ok2 and snapped and snapped.x) then return nil end
+        local result = vector():set(snapped.x, snapped.y + 0.12, snapped.z)
+        local drift = (_G.dft_pos_drift and _G.dft_pos_drift(result, base))
+            or result:distance_to(base)
+        if drift > max_drift_m then return nil end
+        return result
+    end
+
+    local xz = {
+        {0, 0}, {2, 0}, {-2, 0}, {0, 2}, {0, -2},
+        {3, 0}, {-3, 0}, {0, 3}, {0, -3},
+    }
+    for i = 0, 16 do
+        local y_off = i * 0.3
+        for o = 1, #xz do
+            local test = vector():set(base.x + xz[o][1], base.y + y_off, base.z + xz[o][2])
+            local result = try_snap_at(test)
+            if result then return result end
+        end
+    end
+    return nil
+end
+
+-- Build a set of alife object IDs on the current level that are level changers
+-- pointing to target_lvl_name. Uses alife:iterate_objects and dest_game_vertex_id
+-- rather than graph vertex/edge iteration (which is not available in Anomaly's engine).
+-- Returns {[obj_id] = obj_position} for proximity matching in find_door_to.
+function dft_get_graph_edge_gvids(target_lvl_name)
+    local gg = game_graph()
+    local sim = alife()
+    if not (gg and sim) then return {} end
+    if not db or not db.actor then return {} end
+    local actor_lid = gg:vertex(db.actor:game_vertex_id()):level_id()
+    local result = {}
+
+    sim:iterate_objects(function(obj)
+        local cls = 0
+        pcall(function() cls = obj:clsid() end)
+        local is_lc = (cls == clsid.level_changer)
+                   or (clsid.level_changer_s and cls == clsid.level_changer_s)
+        local is_restr = (cls == clsid.script_restr) or (cls == clsid.space_restrictor)
+        if not (is_lc or is_restr) then return end
+
+        -- Must be on the actor's current level
+        local ok_src, src_lid = pcall(function() return gg:vertex(obj.m_game_vertex_id):level_id() end)
+        if not (ok_src and src_lid == actor_lid) then return end
+
+        -- For native level_changers, check dest_game_vertex_id
+        if is_lc then
+            local dgv = obj.dest_game_vertex_id or obj.m_dest_game_vertex_id
+            if dgv and dgv < 65535 and gg:valid_vertex_id(dgv) then
+                local ok_dl, dst_lid = pcall(function() return gg:vertex(dgv):level_id() end)
+                if ok_dl and dft_resolve_level_name(dst_lid) == target_lvl_name then
+                    result[obj.m_game_vertex_id] = obj.position
+                end
+            end
+        end
+
+        -- For script restrictors, check sr_level_changer dest_level
+        if is_restr then
+            local ini = obj:spawn_ini()
+            if ini and ini:section_exist("sr_level_changer") then
+                local dest_lvl = ini:line_exist("sr_level_changer", "dest_level")
+                               and ini:r_string("sr_level_changer", "dest_level")
+                if dest_lvl and dft_resolve_level_name(dest_lvl) == target_lvl_name then
+                    result[obj.m_game_vertex_id] = obj.position
+                end
+                local dgv = ini:line_exist("sr_level_changer", "dest_game_vertex")
+                          and ini:r_u32("sr_level_changer", "dest_game_vertex")
+                if dgv and gg:valid_vertex_id(dgv) then
+                    local ok_dl, dst_lid = pcall(function() return gg:vertex(dgv):level_id() end)
+                    if ok_dl and dft_resolve_level_name(dst_lid) == target_lvl_name then
+                        result[obj.m_game_vertex_id] = obj.position
+                    end
+                end
+            end
+        end
+    end)
+
+    return result
+end
+
+function dft_find_door_to_legacy(target_lvl_name)
+    local gg = game_graph()
+    local sim = alife()
+    if not sim then return nil end
+    if not db or not db.actor then return nil end
+    local actor_lid = gg:vertex(db.actor:game_vertex_id()):level_id()
+
+    -- Strengthened keyword list
+    local keywords = {}
+    if dft_door_keywords[target_lvl_name] then
+        for _, v in ipairs(dft_door_keywords[target_lvl_name]) do table.insert(keywords, v) end
+    end
+
+    -- Fallback: Strip prefixes like l01_ or k00_
+    local prefix = string.match(target_lvl_name, "^[lk]%d+")
+    if prefix then table.insert(keywords, prefix) end
+
+    local base_name = (string.gsub(target_lvl_name, "^[lk]%d+_", ""))
+    table.insert(keywords, base_name)
+    table.insert(keywords, (string.gsub(base_name, "_", ""))) -- e.g. red_forest -> redforest
+
+    local found_lc = nil
+    local found_restr = nil
+    local target_lid = nil
+    for lid, name in pairs(dft.level_names) do
+        if name == target_lvl_name then target_lid = lid break end
+    end
+
+    local function scan_legacy_door(obj)
+        if found_lc then return end
+        if not obj then return end
+        local cls = 0
+        pcall(function() cls = obj:clsid() end)
+        local is_lc = (cls == clsid.level_changer) or (clsid.level_changer_s and cls == clsid.level_changer_s)
+        local is_restr = false
+        if (cls == clsid.script_restr) or (cls == clsid.space_restrictor) then
+            local ini = obj:spawn_ini()
+            if ini and ini:section_exist("sr_level_changer") then
+                is_restr = true
+            end
+        end
+        if not (is_lc or is_restr) then return end
+        local ok_src, src_lid = pcall(function() return gg:vertex(obj.m_game_vertex_id):level_id() end)
+        if not (ok_src and src_lid == actor_lid) then return end
+        local name = obj:name():lower()
+        if dft_is_trader_restrictor(name) then return end
+        for _, kw in ipairs(keywords) do
+            if string.find(name, kw, 1, true) then
+                if is_lc then
+                    found_lc = obj
+                else
+                    found_restr = obj
+                end
+                return
+            end
+        end
+        if not found_lc and target_lid and is_lc then
+            local dgv = obj.dest_game_vertex_id or obj.m_dest_game_vertex_id
+            if dgv and dgv < 65535 and gg:valid_vertex_id(dgv) then
+                local dst_lid = gg:vertex(dgv):level_id()
+                if dst_lid == target_lid then
+                    found_lc = obj
+                end
+            end
+        end
+    end
+
+    if sim.iterate_objects then
+        sim:iterate_objects(scan_legacy_door)
+    else
+        for i = 1, 65534 do
+            scan_legacy_door(sim:object(i))
+            if found_lc then break end
+        end
+    end
+
+    return found_lc or found_restr
+end
+
+function dft_find_door_to(target_lvl_name)
+    if not (db.actor and target_lvl_name) then return nil end
+
+    local gg = game_graph()
+    local actor_lid = gg:vertex(db.actor:game_vertex_id()):level_id()
+    local actor_lvl = dft_resolve_level_name(actor_lid) or "unknown"
+
+    dft_log(" Looking for door from %s to %s (Hybrid Proximity Scan)", actor_lvl, target_lvl_name)
+
+    local candidates = {}
+    local actor_pos = db.actor:position()
+
+    -- Helper to add candidate safely
+    local function add_candidate(obj, source_name)
+        if not obj then return end
+        local name = obj:name()
+        if dft_is_trader_restrictor(name) then
+            dft_log("   Skipped candidate due to trader keyword: %s", name)
+            return
+        end
+        local door_pos = dft_snap_door_pos(obj)
+        if not door_pos then return end
+        local dist = actor_pos:distance_to(door_pos)
+
+        local has_spot = false
+        pcall(function()
+            has_spot = (level.map_has_object_spot(obj.id, "level_changer") ~= 0)
+                    or (level.map_has_object_spot(obj.id, "level_changer_up") ~= 0)
+                    or (level.map_has_object_spot(obj.id, "level_changer_down") ~= 0)
+        end)
+
+        local has_name_match = false
+        local low_name = name:lower()
+        if dft_door_keywords[target_lvl_name] then
+            for _, kw in ipairs(dft_door_keywords[target_lvl_name]) do
+                if string.find(low_name, kw, 1, true) then
+                    has_name_match = true
+                    break
+                end
+            end
+        end
+
+        table.insert(candidates, {
+            id   = obj.id,
+            pos  = door_pos,
+            raw_pos = vector():set(obj.position.x, obj.position.y, obj.position.z),
+            lvid = obj.m_level_vertex_id,
+            gvid = obj.m_game_vertex_id,
+            dist = dist,
+            name = name,
+            source = source_name,
+            has_spot = has_spot,
+            has_name_match = has_name_match
+        })
+        dft_log("   Found candidate [%s]: %s (dist %.1f, marked: %s, name_match: %s)", source_name, name, dist, tostring(has_spot), tostring(has_name_match))
+    end
+
+    -- 1. Dynamic Registry (Built by build_dynamic_map, covers space restrictors, ELT, and native changers)
+    if dft.door_registry and dft.door_registry[actor_lvl] and dft.door_registry[actor_lvl][target_lvl_name] then
+        local ids = dft.door_registry[actor_lvl][target_lvl_name]
+        for _, id in ipairs(ids) do
+            local obj = alife_object(id)
+            if obj then
+                add_candidate(obj, "Dynamic Registry")
+            end
+        end
+    end
+
+    -- 2. Graph-edge authoritative scan (Only if registry missed)
+    if #candidates == 0 then
+        local edge_gvids = dft_get_graph_edge_gvids(target_lvl_name)
+        if edge_gvids and next(edge_gvids) then
+            local sim = alife()
+            if sim then
+                sim:iterate_objects(function(obj)
+                    if not edge_gvids[obj.m_game_vertex_id] then return end
+                    local ok_lid, src_lid = pcall(function() return gg:vertex(obj.m_game_vertex_id):level_id() end)
+                    if ok_lid and src_lid == actor_lid then
+                        local cls = 0
+                        pcall(function() cls = obj:clsid() end)
+                        local sec = obj:section_name()
+                        local is_lc = (cls == clsid.level_changer) or (clsid.level_changer_s and cls == clsid.level_changer_s)
+                        local is_sr = false
+                        if (cls == clsid.space_restrictor) or (cls == clsid.script_restr) then
+                            local ini = obj:spawn_ini()
+                            if ini and ini:section_exist("sr_level_changer") then
+                                is_sr = true
+                            end
+                        end
+                        local is_elt = _G.lc_extra_transitions and _G.lc_extra_transitions.lc_pool and _G.lc_extra_transitions.lc_pool[sec] ~= nil
+                        if is_lc or is_sr or is_elt then
+                            add_candidate(obj, "Graph Edge Scan")
+                        end
+                    end
+                end)
+            end
+        end
+    end
+
+    -- 3. Keyword legacy scan (Only if prior scans missed)
+    if #candidates == 0 then
+        local legacy_obj = dft_find_door_to_legacy(target_lvl_name)
+        if legacy_obj then
+            add_candidate(legacy_obj, "Legacy Scan")
+        end
+    end
+
+    -- 4. Brute-force dest-vertex scan (Only if all prior scans missed)
+    if #candidates == 0 then
+        local sim = alife()
+        if sim then
+            sim:iterate_objects(function(obj)
+                local cls = 0
+                pcall(function() cls = obj:clsid() end)
+                local is_lc = (cls == clsid.level_changer)
+                           or (clsid.level_changer_s and cls == clsid.level_changer_s)
+                if not is_lc then return end
+                local ok_src, src_lid = pcall(function() return gg:vertex(obj.m_game_vertex_id):level_id() end)
+                if not (ok_src and src_lid == actor_lid) then return end
+                local dgv = obj.dest_game_vertex_id or obj.m_dest_game_vertex_id
+                if dgv and dgv < 65535 and gg:valid_vertex_id(dgv) then
+                    local ok_dl, dst_lid = pcall(function() return gg:vertex(dgv):level_id() end)
+                    if ok_dl and dft_resolve_level_name(dst_lid) == target_lvl_name then
+                        add_candidate(obj, "Brute Force Scan")
+                    end
+                end
+            end)
+        end
+    end
+
+    -- Sort candidates: prioritize those with target level name matches, then map spots, then by distance (ascending)
+    if #candidates > 0 then
+        table.sort(candidates, function(a, b)
+            if a.has_name_match ~= b.has_name_match then
+                return a.has_name_match
+            end
+            if a.has_spot ~= b.has_spot then
+                return a.has_spot
+            end
+            return a.dist < b.dist
+        end)
+        local best = candidates[1]
+        dft_log(" Unified Proximity Scan Winner: %s via %s (dist %.1f, pos: [%.1f, %.1f, %.1f])",
+            best.name, best.source, best.dist, best.pos.x, best.pos.y, best.pos.z)
+
+        -- Redirect to closest native level changer fallback if the selected door is scripted (space restrictor or ELT)
+        -- to ensure 100% reliable engine-level loading screen activation and correct next-level spawning coordinates.
+        local best_obj = alife_object(best.id)
+        local is_native_lc = false
+        if best_obj then
+            local cls = 0
+            pcall(function() cls = best_obj:clsid() end)
+            is_native_lc = (cls == clsid.level_changer) or (clsid.level_changer_s and cls == clsid.level_changer_s)
+        end
+
+        if not is_native_lc then
+            dft_log("   Selected door is not a native level changer. Searching candidates for native changer at the same gateway...")
+            local best_lc = nil
+            local min_gate_dist = 40.0 -- Must be the same gateway (within 40 meters)
+            for _, cand in ipairs(candidates) do
+                local cand_obj = alife_object(cand.id)
+                if cand_obj then
+                    local cls = 0
+                    pcall(function() cls = cand_obj:clsid() end)
+                    local ok_lc = (cls == clsid.level_changer) or (clsid.level_changer_s and cls == clsid.level_changer_s)
+                    if ok_lc then
+                        -- Measure distance between selected door and this native changer
+                        local d = cand.pos:distance_to(best.pos)
+                        if d < min_gate_dist then
+                            min_gate_dist = d
+                            best_lc = cand
+                        end
+                    end
+                end
+            end
+            if best_lc then
+                dft_log("   Redirected to nearby native level changer: %s (dist to selected door: %.1f)", best_lc.name, min_gate_dist)
+                best = best_lc
+            else
+                dft_log("   No nearby native level changer fallback found (threshold 40m). Using selected door directly.")
+            end
+        end
+
+        -- Register for future hops to cache it
+        dft.door_registry[actor_lvl] = dft.door_registry[actor_lvl] or {}
+        dft.door_registry[actor_lvl][target_lvl_name] = dft.door_registry[actor_lvl][target_lvl_name] or {}
+        local already_registered = false
+        for _, id in ipairs(dft.door_registry[actor_lvl][target_lvl_name]) do
+            if id == best.id then already_registered = true break end
+        end
+        if not already_registered then
+            table.insert(dft.door_registry[actor_lvl][target_lvl_name], 1, best.id)
+        end
+
+        return { pos = best.pos, raw_pos = best.raw_pos, lvid = best.lvid, gvid = best.gvid }
+    end
+
+    printf("[DFT] FAILED to find door to %s from %s after all scan stages.", target_lvl_name, actor_lvl)
+    return nil
+end
+
+function dft_advance_travel_time(ratio, opts)
+    opts = opts or {}
+    local allow_surge = opts.allow_surge == true
+    if not (dft.start_game_time and dft.expected_duration and dft.expected_duration > 0) then
+        return
+    end
+    local actual_elapsed = game.get_game_time():diffSec(dft.start_game_time)
+    local target_seconds = math.floor(ratio * dft.expected_duration * 60)
+    local diff_sec = target_seconds - actual_elapsed
+    if diff_sec > 0 and level and level.change_game_time then
+        local days = math.floor(diff_sec / 86400)
+        local hrs  = math.floor((diff_sec % 86400) / 3600)
+        local mins = math.floor((diff_sec % 3600) / 60)
+
+        if not allow_surge then
+            -- Skip any active or imminent surges BEFORE jumping the clock.
+            dft_check_and_skip_surges()
+        end
+
+        local function wipe_dangerous_stats()
+            pcall(function()
+                if db.actor then
+                    if db.actor.radiation and db.actor.radiation > 0 then
+                        db.actor.radiation = -1.0
+                    end
+                    if db.actor.psy_health and db.actor.psy_health < 1.0 then
+                        db.actor.psy_health = 1.0
+                    end
+                    if db.actor.health and db.actor.health < 1.0 then
+                        db.actor.health = 1.0
+                    end
+                    pcall(function() db.actor.power = 1.0 end)
+                end
+            end)
+        end
+        if not allow_surge then
+            wipe_dangerous_stats()
+        end
+
+        level.change_game_time(days, hrs, mins)
+
+        if not allow_surge then
+            pcall(function()
+                if surge_manager and surge_manager.get_surge_manager then
+                    local sm = surge_manager.get_surge_manager()
+                    if sm then
+                        sm.started = false
+                        sm.finished = true
+                        sm.last_surge_time = game.get_game_time()
+                        sm._delta = 6 * 3600
+                    end
+                end
+                if psi_storm_manager and psi_storm_manager.get_psi_storm_manager then
+                    local pm = psi_storm_manager.get_psi_storm_manager()
+                    if pm then
+                        pm.started = false
+                        pm.finished = true
+                        pm.last_surge_time = game.get_game_time()
+                        if pm.last_psi_storm_time then
+                            pm.last_psi_storm_time = game.get_game_time()
+                        end
+                        pm._delta = 6 * 3600
+                    end
+                end
+            end)
+            wipe_dangerous_stats()
+        end
+        local secs = diff_sec % 60
+        dft_log(" advance_travel_time: jumped %dd %dh %dm %ds (ratio %.2f allow_surge=%s)",
+            days, hrs, mins, secs, ratio, tostring(allow_surge))
+        if not allow_surge then
+            for i = 1, 20 do
+                CreateTimeEvent("dft", "post_jump_wipe_" .. i, i * 0.5, function()
+                    if dft_is_safety_active() then wipe_dangerous_stats() end
+                    return true
+                end)
+            end
+        end
+    end
+end
+
+-- dft_publish_to_global
+do
+    _G.dft_is_zone_blocked = dft_is_zone_blocked
+    _G.dft_find_zone_path = dft_find_zone_path
+    _G.dft_get_graph_edge_gvids = dft_get_graph_edge_gvids
+    _G.dft_find_door_to_legacy = dft_find_door_to_legacy
+    _G.dft_find_door_to = dft_find_door_to
+    _G.dft_advance_travel_time = dft_advance_travel_time
+    _G.dft_snap_door_pos = dft_snap_door_pos
+end

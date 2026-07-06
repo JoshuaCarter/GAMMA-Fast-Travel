@@ -1,0 +1,401 @@
+-- Dorn's Fast Travel: Shared state, constants, logging, and PDA messages.
+-- Loaded automatically before zzzz_dorn_fast_travel_main.script
+
+-- Shared dft globals (Anomaly isolates zzz_* script environments)
+local dft_config = _G.dft_config
+local dft_defaults = {
+    is_traveling        = false,
+    player_ready        = true,
+    start_pos           = nil,
+    dest_pos            = nil,
+    dest_lvid           = nil,
+    dest_gvid           = nil,
+    final_gvid          = nil,
+    final_pos           = nil,
+    final_lvid          = nil,
+    travel_dist         = 0,
+    current_dist        = 0,
+    last_update_tg      = 0,
+    next_update         = 0,
+    is_transition       = false,
+    start_game_time     = nil,
+    last_encounter_check = 0,
+    journey_cost        = 0,
+    dynamic_map         = {}, -- [src_lvl][dst_lvl] = true
+    door_registry       = {}, -- [src_lvl][dst_lvl] = {ids}
+    level_names         = {}, -- [lid] = name
+    level_ids_by_name   = {}, -- [name] = lid
+    level_offsets       = {}, -- [lid] = {x,y,z} global PDA map offset
+    level_registry_built = false,
+    dot_positions       = {},
+    dot_ids             = {},
+    dot_path_ratio      = {},
+    dot_done            = {},
+    path_preview_id     = nil,
+    is_path_preview     = false,
+    menu_open_seq       = 0,
+    last_map_click_pos  = nil,
+    last_menu_target_id = nil,
+    lc_spot_ids         = nil,
+    right_click_avail   = false,
+    active_config       = {},
+    travel_mode         = "normal",
+    encounters_avoided  = 0,
+    arrival_forced_ambushes = 0,
+    arrival_short_m       = 0,
+    ambush_targets      = nil,  -- { squads={}, npcs={} } when mid-journey ambush confirmed
+    arrival_ambush_targets = nil,
+    emission_interrupt_ratio = nil, -- 0-1 path fraction when scheduled emission hits
+    emission_time_jump_secs  = nil, -- game seconds to advance at interrupt (secs_until - lead)
+    emission_interrupt_pending = false,
+    graph_cache         = nil,  -- [{gvid, lvid, pos}] on current level
+    graph_lvid_map      = nil,  -- [lvid] = gvid
+    graph_cache_level   = nil,
+    graph_cache_name    = nil,
+    menu_resolve_cache  = nil,  -- { seq, id, ln, target, err } — one resolve per map menu open
+    menu_path_cache     = nil,  -- { seq, id, chain, is_vertex, path_len } — one path build per menu open
+    encumbrance_time_mult = 1.0,
+    encumbrance_speed_mult = 1.0,
+}
+_G.dft = _G.dft or {}
+for key, value in pairs(dft_defaults) do
+    if _G.dft[key] == nil then
+        _G.dft[key] = value
+    end
+end
+local dft = _G.dft
+
+_G.dft_invalid_lvid = 4294967295
+_G.dft_invalid_gvid = 65535
+_G.dft_travel_max_alife_graph_drift = 100
+_G.dft_travel_max_click_drift = 150
+
+_G.dft_travel = {
+    pda_speed            = 50,  -- reference PDA bar speed; at this rate, normal travel = min_per_km game minutes
+    sneak_dodge_base     = 25,  -- ambush dodge at Sneaking Lv 0 (sneak mode only)
+    sneak_dodge_per_lvl  = 3,
+    sneak_dodge_cap      = 85,
+    min_per_km           = 30,  -- normal travel: 30 game minutes per km
+    sneak_min_per_km     = 180, -- sneak Lv0: 3 hours per km
+    sneak_min_per_lvl    = 5,   -- sneak: -5 min/km per Sneaking level
+    sneak_min_floor      = 80,  -- sneak: 80 min/km at high level
+    emission_lead_secs   = 8,   -- game seconds before emission after planned interrupt
+    resource_rate_per_hr = 0.10,
+    encumbrance_yellow_buffer_kg = 10,
+    encumbrance_yellow_speed   = 0.8,
+    encumbrance_red_speed      = 0.5,
+}
+
+_G.dft_guide_cost_per_km = 3000
+
+_G.dft_hostile = {
+    radius_m   = 50,  -- legacy travel-block reference; ambush uses dft_ambush_radius_m
+    vertical_m = 10,  -- |dy| for proximity without LOS check
+}
+
+_G.dft_ambush = {
+    radius_base        = 60,
+    radius_min         = 20,
+    radius_max         = 60,
+    travel_detection_m   = 10,  -- normal travel: +10m ambush detection (sprinting)
+    time_twilight_m    = 10,
+    time_night_m       = 20,
+    weather_rain_m     = 10,
+    weather_storm_m    = 15,
+    weather_fog_m      = 20,
+    offset_mode_travel = -10, -- recklessness pullback
+    offset_mode_sneak  = 10,  -- caution pullback
+    offset_per_sneak   = 1,
+    offset_min         = 20,
+    offset_max         = 80,
+    standoff_min_m     = 20,  -- target horizontal distance from hostiles at ambush landing
+    ping_hit_power     = 0.01, -- minimal torso wound from actor (arena-style wakeup)
+}
+
+-- Integer game hours from level.get_time_hours() (0-23).
+-- day:      07-19  full daylight, widest ambush scan
+-- twilight: 06-07 dawn, 19-20 dusk  reduced visibility (tighter ambush scan)
+-- night:    20-06  dark hours, lowest visibility (tightest ambush scan)
+_G.dft_time_of_day = {
+    day_start           = 7,
+    day_end             = 19,
+    twilight_dawn_start = 6,
+    twilight_dawn_end   = 7,
+    twilight_dusk_start = 19,
+    twilight_dusk_end   = 20,
+    night_start         = 20,
+    night_end           = 6,
+}
+
+_G.dft_arrival = {
+    reroute_max = 10,
+}
+
+_G.dft_path = {
+    dot_spot              = "dft_path_dot",
+    dot_spot_pending      = "dft_path_dot_pending",
+    dot_spot_debug_vertex = "dft_path_debug_vertex",
+    dot_spot_debug_edge   = "dft_path_debug_edge",
+    dot_max_count         = 1000,
+    dot_spacing_m         = 20,  -- journey dots every 20m along generated path
+    step_m                = 20,  -- advance exactly this far toward dest before each snap search
+    road_snap_m           = 19,  -- road node search radius around forward sample (must be < step_m)
+    max_step_jump_m       = 20,  -- max distance between consecutive path points (nav/raw only)
+    road_on_graph_max_m   = 5,   -- navmesh counts as on-road when this close to a graph node
+    max_path_steps        = 500,
+    path_stall_min_m      = 1.0, -- min progress per step; road snap repeats break here
+    preview_edge_spacing_m = 5,
+    lc_snap_max_drift_m   = 25,  -- max navmesh snap distance from level changer
+    ground_snap_max_drift_m = 60,
+    graph_nearest_max_m   = 50,  -- tight graph lookup for transitions
+}
+
+_G.dft_path.dots = {
+    _G.dft_path.dot_spot, _G.dft_path.dot_spot_pending,
+    _G.dft_path.dot_spot_debug_vertex, _G.dft_path.dot_spot_debug_edge,
+}
+
+_G.dft_sneaking = {
+    travel_speed_per_level = 2,   -- percent PDA map speed per level (fallback)
+}
+
+_G.dft_save_vars = {
+    traveling  = "dft_jt",
+    dest_x     = "dft_dx",
+    dest_y     = "dft_dy",
+    dest_z     = "dft_dz",
+    dest_raw_x = "dft_drx",
+    dest_raw_y = "dft_dry",
+    dest_raw_z = "dft_drz",
+    dest_lvid  = "dft_dl",
+    dest_gvid  = "dft_dg",
+    final_gvid = "dft_fg",
+    final_x    = "dft_fx",
+    final_y    = "dft_fy",
+    final_z    = "dft_fz",
+    final_lvid = "dft_fl",
+    cost       = "dft_co",
+    dot_count  = "dft_dc",
+    stats_amb  = "dft_sa",
+    stats_pos  = "dft_sp",
+}
+
+_G.dft_static_zone_map = {
+    l01_escape          = {"l02_garbage", "k00_marsh", "k01_darkscape", "meadow"},
+    k00_marsh           = {"l01_escape", "l03_agroprom"},
+    l02_garbage         = {"l01_escape", "l03_agroprom", "l04_darkvalley", "l05_bar", "l06_rostok"},
+    l03_agroprom        = {"l02_garbage", "l08_yantar", "k00_marsh"},
+    l04_darkvalley      = {"l02_garbage", "k01_darkscape", "meadow", "k02_trucks_cemetery"},
+    k01_darkscape       = {"l01_escape", "l04_darkvalley"},
+    l05_bar             = {"l02_garbage", "l07_military", "l06_rostok"},
+    l06_rostok          = {"l02_garbage", "l05_bar", "l08_yantar"},
+    l07_military        = {"l05_bar", "l10_red_forest", "l10_radar", "l09_deadcity", "k02_trucks_cemetery"},
+    l08_yantar          = {"l03_agroprom", "l06_rostok", "l09_deadcity"},
+    l09_deadcity        = {"l08_yantar", "l07_military", "limansk"},
+    l10_red_forest      = {"l07_military", "jupiter", "limansk", "l10_radar"},
+    l10_radar           = {"l07_military", "l10_red_forest", "l11_pripyat"},
+    l11_pripyat         = {"l10_radar", "pripyat", "jupiter"},
+    pripyat             = {"l11_pripyat", "jupiter", "l12_stancia", "zaton"},
+    jupiter             = {"zaton", "l10_red_forest", "pripyat", "l11_pripyat"},
+    zaton               = {"jupiter", "pripyat"},
+    limansk             = {"l10_red_forest", "l11_hospital", "l09_deadcity"},
+    l11_hospital        = {"limansk", "l12_stancia_2"},
+    meadow              = {"l04_darkvalley", "l01_escape"},
+    k02_trucks_cemetery = {"l07_military", "l04_darkvalley"},
+    l12_stancia         = {"pripyat", "l12_stancia_2", "l13_generators"},
+    l12_stancia_2       = {"l12_stancia", "l13_generators", "l11_hospital"},
+    l13_generators      = {"l12_stancia", "l12_stancia_2"},
+}
+
+_G.dft_door_keywords = {
+    l01_escape          = {"escape", "esc"},
+    l02_garbage         = {"garbage", "gar"},
+    l03_agroprom        = {"agroprom", "agr"},
+    l04_darkvalley      = {"darkvalley", "val"},
+    l05_bar             = {"bar"},
+    l06_rostok          = {"rostok", "ros"},
+    l07_military        = {"military", "mil", "army_warehouses", "army", "warehouse", "aw"},
+    l08_yantar          = {"yantar", "yan"},
+    l09_deadcity        = {"deadcity", "dead_city", "cit"},
+    l10_red_forest      = {"red_forest", "redforest", "red"},
+    l10_radar           = {"radar", "rad"},
+    l11_pripyat         = {"l11_pripyat", "l11"},
+    l12_stancia         = {"stancia", "aes"},
+    l12_stancia_2       = {"stancia_2", "stancia2", "aes2"},
+    l13_generators      = {"generators", "gen"},
+    k00_marsh           = {"marsh", "mar", "swamp"},
+    k01_darkscape       = {"darkscape", "dsc"},
+    k02_trucks_cemetery = {"tc", "trc", "trucks", "truck", "cemetery", "cem", "k02"},
+    meadow              = {"pole", "meadow", "y04_pole", "field"},
+    jupiter             = {"jupiter", "jup"},
+    zaton               = {"zaton", "zat"},
+    pripyat             = {"outskirts", "pripyat", "pri"},
+    limansk             = {"limansk", "lim"},
+    l11_hospital        = {"hospital", "hos"},
+}
+
+function dft_format_msg(fmt, ...)
+    local arg = {...}
+    if #arg == 0 then return tostring(fmt) end
+    local ok, res = pcall(string.format, fmt, ...)
+    return ok and res or (tostring(fmt) .. " (format error)")
+end
+
+function dft_log(fmt, ...)
+    local cfg = _G.dft_config
+    if not (cfg and cfg.debug_log) then return end
+    printf("[DFT] " .. dft_format_msg(fmt, ...))
+end
+
+function dft_path_road_log_enabled()
+    local cfg = _G.dft_config
+    if cfg and cfg.debug_log then return true end
+    if cfg and cfg.path_preview and dft.is_path_preview then return true end
+    return false
+end
+
+function dft_path_road_log(fmt, ...)
+    if not dft_path_road_log_enabled() then return end
+    printf("[DFT path-road] " .. dft_format_msg(fmt, ...))
+end
+
+function dft_log_error(fmt, ...)
+    printf("[DFT ERROR] " .. dft_format_msg(fmt, ...))
+end
+
+-- Player-facing text: edit gamedata/configs/text/eng/st_dorn_fast_travel.xml
+-- Display via dft_msg() / dft_str(); MCM labels stay in ui_mcm_dorn_fast_travel.xml
+function dft_str(id)
+    local s = game.translate_string(id)
+    if s and s ~= "" and s ~= id then return s end
+    return id
+end
+
+function dft_destination_on_other_level(obj)
+    if not (obj and db.actor) then return false end
+    local gg = game_graph()
+    if not gg then return false end
+    local ok_a, actor_lid = pcall(function() return gg:vertex(db.actor:game_vertex_id()):level_id() end)
+    local ok_d, dest_lid = pcall(function() return gg:vertex(obj.m_game_vertex_id):level_id() end)
+    return ok_a and ok_d and actor_lid ~= dest_lid
+end
+
+-- True when object's game-graph level matches the actor's loaded level (not PDA tab name).
+function dft_object_on_loaded_level(se_obj)
+    if not (se_obj and db.actor and game_graph) then return true end
+    local gg = game_graph()
+    local obj_gvid = se_obj.m_game_vertex_id
+    if not (obj_gvid and gg.valid_vertex_id and gg:valid_vertex_id(obj_gvid)) then
+        return not dft_destination_on_other_level(se_obj)
+    end
+    local ok_a, actor_lid = pcall(function() return gg:vertex(db.actor:game_vertex_id()):level_id() end)
+    local ok_o, obj_lid = pcall(function() return gg:vertex(obj_gvid):level_id() end)
+    return ok_a and ok_o and actor_lid == obj_lid
+end
+
+
+function dft_is_cross_zone_destination(se_obj, ln)
+    local cur_lvl = (level and level.name) and level.name() or nil
+    if ln and cur_lvl and ln ~= cur_lvl then return true end
+    if se_obj then return dft_destination_on_other_level(se_obj) end
+    return false
+end
+
+function dft_dbg(order, msg, color)
+    local cfg = _G.dft_config
+    local dft_dorn = _G.dft.dorn
+    if dft_dorn and dft_dorn.dbg and cfg and cfg.debug_overlay then
+        dft_dorn.dbg.write("dorn_fast_travel", order, msg, color)
+    end
+end
+
+function dft_dbg_clear()
+    local dft_dorn = _G.dft.dorn
+    if dft_dorn and dft_dorn.dbg then
+        dft_dorn.dbg.clear_source("dorn_fast_travel")
+    end
+end
+
+function dft_safe_create_item(section, fallback)
+    if not db or not db.actor then return end
+    local ini = system_ini()
+    if section and ini:section_exist(section) then
+        alife_create_item(section, db.actor)
+    elseif fallback and ini:section_exist(fallback) then
+        dft_log("SAFE CREATE: Section %s missing, falling back to %s", tostring(section), tostring(fallback))
+        alife_create_item(fallback, db.actor)
+    else
+        dft_log("SAFE CREATE ERROR: Section %s and fallback missing!", tostring(section))
+    end
+end
+
+function dft_is_trader_restrictor(name)
+    if not name then return false end
+    local low_name = string.lower(name)
+    return string.find(low_name, "trader") ~= nil
+        or string.find(low_name, "merchant") ~= nil
+        or string.find(low_name, "barman") ~= nil
+        or string.find(low_name, "sidorovich") ~= nil
+        or string.find(low_name, "saharov") ~= nil
+        or string.find(low_name, "forester") ~= nil
+end
+
+-- %c[] prefixes work reliably in news_manager.send_tip.
+local dft_msg_style_prefix_map = {
+    danger  = "%c[255,238,28,36]",
+    warning = "%c[255,209,209,56]",
+    success = "%c[255,56,209,115]",
+}
+
+local dft_msg_style_icon_map = {
+    danger  = "ui_inGame2_radiation_hard",
+    warning = "ui_inGame2_radiation_middle",
+}
+
+function dft_msg_style_prefix(style)
+    return (style and dft_msg_style_prefix_map[style]) or ""
+end
+
+function dft_msg_style_icon(style)
+    return (style and dft_msg_style_icon_map[style]) or nil
+end
+
+dft_msg = function(text, style)
+    if not (db.actor and db.actor:alive()) then return end
+    local prefix = dft_msg_style_prefix(style)
+    if prefix ~= "" then
+        text = prefix .. text
+    end
+    local icon = dft_msg_style_icon(style)
+    local refresh = _G.refresh_active_config or refresh_active_config
+    local cfg = dft.active_config or (refresh and refresh()) or {}
+    local duration = tonumber(cfg.message_duration) or 30
+    -- send_tip uses milliseconds and honors long durations; actor_menu.set_msg ignores MCM values.
+    if news_manager and news_manager.send_tip then
+        news_manager.send_tip(db.actor, text, nil, icon, duration * 1000)
+    elseif actor_menu and actor_menu.set_msg then
+        actor_menu.set_msg(1, text, duration)
+    end
+end
+
+-- dft_publish_to_global
+do
+    _G.dft_config = _G.dft_config or {}
+    _G.dft_format_msg = dft_format_msg
+    _G.dft_log = dft_log
+    _G.dft_path_road_log_enabled = dft_path_road_log_enabled
+    _G.dft_path_road_log = dft_path_road_log
+    _G.dft_log_error = dft_log_error
+    _G.dft_str = dft_str
+    _G.dft_destination_on_other_level = dft_destination_on_other_level
+    _G.dft_object_on_loaded_level = dft_object_on_loaded_level
+    _G.dft_is_cross_zone_destination = dft_is_cross_zone_destination
+    _G.dft_dbg = dft_dbg
+    _G.dft_dbg_clear = dft_dbg_clear
+    _G.dft_safe_create_item = dft_safe_create_item
+    _G.dft_is_trader_restrictor = dft_is_trader_restrictor
+    _G.dft_msg = dft_msg
+    _G.dft_msg_style_prefix = dft_msg_style_prefix
+    _G.dft_msg_style_icon = dft_msg_style_icon
+    printf("[DFT] core module loaded")
+end

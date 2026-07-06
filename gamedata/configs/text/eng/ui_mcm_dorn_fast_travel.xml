@@ -5,27 +5,14 @@
 	<string id="ui_mcm_dorn_fast_travel_main_section">
 		<text>Main</text>
 	</string>
-	<string id="ui_mcm_dorn_fast_travel_development_section">
-		<text>Development</text>
-	</string>
-
-	<string id="ui_mcm_dorn_fast_travel_travel_speed">
-		<text>Fastest Travel Speed</text>
-	</string>
-	<string id="ui_mcm_dorn_fast_travel_travel_speed_desc">
-		<text>How fast the PDA journey bar moves when lightly loaded (white inventory weight). Yellow weight (-20%% speed) and red weight (-50%% speed) slow you further. Sneaking is about 3x slower. Too encumbered to walk blocks walk/sneak travel; guides still work.</text>
-	</string>
 	<string id="ui_mcm_dorn_fast_travel_message_duration">
 		<text>Message Duration</text>
 	</string>
 	<string id="ui_mcm_dorn_fast_travel_message_duration_desc">
-		<text>How long travel notifications stay on screen (seconds).</text>
+		<text>How long travel notifications stay on screen (seconds). See PDA Guide > Addons > Dorn's Fast Travel for travel rules.</text>
 	</string>
-	<string id="ui_mcm_dorn_fast_travel_ambush_detection_desc">
-		<text>Ambushes: dodge chance is Sneaking skill + sneak mode only (sneak doubles, 95%% cap). Visibility scan = time base (day 50 m, dawn/dusk 40 m, night 30 m) minus weather (best only: rain -10 m, storm -15 m, fog -20 m; 10 m floor). If spotted, you are dropped short and must fight. Guides cannot be ambushed. Cannot start with enemies within 50 m.</text>
-	</string>
-	<string id="ui_mcm_dorn_fast_travel_guide_cost_desc">
-		<text>Guide travel (instant jump to a base on another map): Easy 2000 RU/km, Medium 2500 RU/km, Hard 3000 RU/km.</text>
+	<string id="ui_mcm_dorn_fast_travel_development_section">
+		<text>Development</text>
 	</string>
 	<string id="ui_mcm_dorn_fast_travel_debug_overlay">
 		<text>Debug Overlay</text>

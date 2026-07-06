@@ -11,16 +11,6 @@ function on_mcm_load()
 				text = "ui_mcm_dorn_fast_travel_main_section",
 				gr = {
 					{
-						id = "travel_speed",
-						type = "track",
-						val = 2,
-						min = 10,
-						max = 50,
-						step = 5,
-						def = 50,
-						hint = "dorn_fast_travel_travel_speed",
-					},
-					{
 						id = "message_duration",
 						type = "track",
 						val = 2,
@@ -29,18 +19,6 @@ function on_mcm_load()
 						step = 1,
 						def = 30,
 						hint = "dorn_fast_travel_message_duration",
-					},
-					{ id = "line_ambush", type = "line" },
-					{
-						id = "ambush_detection_desc",
-						type = "desc",
-						text = "ui_mcm_dorn_fast_travel_ambush_detection_desc",
-					},
-					{ id = "line_guide", type = "line" },
-					{
-						id = "guide_cost_desc",
-						type = "desc",
-						text = "ui_mcm_dorn_fast_travel_guide_cost_desc",
 					},
 				},
 			},

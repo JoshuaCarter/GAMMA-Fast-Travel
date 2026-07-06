@@ -41,6 +41,9 @@
 	<string id="dft_msg_hostiles_nearby">
 		<text>Hostiles are too close - deal with them before traveling.</text>
 	</string>
+	<string id="dft_msg_emission_active">
+		<text>Cannot travel during an emission.</text>
+	</string>
 	<string id="dft_msg_cross_zone_denied">
 		<text>You can only fast travel within the current zone. Use a zone exit or hire a guide.</text>
 	</string>
@@ -54,6 +57,9 @@
 	<!-- Journey end - one full message per result (script picks a single id) -->
 	<string id="dft_msg_journey_cancelled">
 		<text>Journey cancelled.</text>
+	</string>
+	<string id="dft_msg_journey_cancelled_emission">
+		<text>Journey cancelled - emission underway.</text>
 	</string>
 	<string id="dft_summary_arrived">
 		<text>Destination reached after %s.</text>
@@ -69,6 +75,9 @@
 	</string>
 	<string id="dft_summary_ambushed">
 		<text>Ambushed from %dm away.</text>
+	</string>
+	<string id="dft_summary_emission_interrupt">
+		<text>Emission cut your journey short.</text>
 	</string>
 
 	<!-- Guide -->

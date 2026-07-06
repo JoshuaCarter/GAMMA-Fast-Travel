@@ -21,49 +21,63 @@
 
 			\n%c[pda_green]HOW TO TRAVEL\n
 			%c[pda_white]- %c[ui_gray_2]Open the PDA map and %c[pda_yellow]right-click%c[ui_gray_2] a destination - bases, campfires, zone exits, your own stashes, and similar markers.\n
-			%c[pda_white]- %c[pda_yellow]Travel here%c[ui_gray_2]: normal speed. Free. About one game hour per kilometre at normal weight on the same map.\n
-			%c[pda_white]- %c[pda_yellow]Sneak here%c[ui_gray_2]: about %c[pda_yellow]3x slower%c[ui_gray_2] than normal travel, but much better odds of avoiding ambushes.\n
-			%c[pda_white]- %c[pda_yellow]Hire guide%c[ui_gray_2]: pay rubles for an instant jump (usually to a base on another map). Fee depends on difficulty and distance.\n
+			%c[pda_white]- %c[pda_yellow]Travel here%c[ui_gray_2]: fast and free on the same map. About %c[pda_yellow]30 minutes per km%c[ui_gray_2] at normal weight.\n
+			%c[pda_white]- %c[pda_yellow]Sneak here%c[ui_gray_2]: much slower (%c[pda_yellow]about 3 hours per km%c[ui_gray_2] at Sneaking Lv0) but you can dodge ambushes.\n
+			%c[pda_white]- %c[pda_yellow]Hire guide%c[ui_gray_2]: pay %c[pda_yellow]3000 RU per km%c[ui_gray_2] for an instant jump (usually to a base on another map). No ambushes.\n
 			%c[pda_white]- %c[ui_gray_2]Your own backpack stashes (and anomalous stashes if installed): %c[pda_yellow]Hire guide%c[ui_gray_2] only.\n
-			%c[pda_white]- %c[ui_gray_2]Animated walk travel works %c[pda_yellow]only within your current map%c[ui_gray_2]. Use a zone exit or hire a guide to leave the area.\n
+			%c[pda_white]- %c[ui_gray_2]Walk travel works %c[pda_yellow]only within your current map%c[ui_gray_2]. Use a zone exit or hire a guide to leave the area.\n
+			%c[pda_white]- %c[ui_gray_2]You cannot travel during an active emission - the PDA is disabled.\n
+
+			\n%c[pda_green]EMISSIONS\n
+			%c[pda_white]- %c[ui_gray_2]Cannot start %c[pda_yellow]Travel%c[ui_gray_2], %c[pda_yellow]Sneak%c[ui_gray_2], or %c[pda_yellow]Hire guide%c[ui_gray_2] during an active emission or when one is due immediately.\n
+			%c[pda_white]- %c[ui_gray_2]Before a long trip, the mod checks when the next emission is due. If it falls before you would arrive, it works out how far along your route you will be (%c[pda_yellow]emission time / trip time%c[ui_gray_2]).\n
+			%c[pda_white]- %c[ui_gray_2]When the journey bar reaches that point: you are dropped on your route, game time jumps forward to just before the emission, and it begins normally. Partial hunger/thirst/tiredness only.\n
+			%c[pda_white]- %c[ui_gray_2]If an emission starts %c[pda_yellow]before%c[ui_gray_2] you reach that point on the bar, the journey is %c[pda_yellow]cancelled%c[ui_gray_2] - you stay where you started and face it there. No time passes.\n
+
+			\n%c[pda_green]TRIP SPEED (PDA BAR)\n
+			%c[pda_white]- %c[ui_gray_2]How fast the journey bar moves is how much game time passes. Slower bar = longer trip = more hunger, thirst, and tiredness.\n
+			%c[pda_white]- %c[ui_gray_2]Sneaking skill raises sneak travel speed (%c[pda_yellow]+2%%%c[ui_gray_2] PDA speed per level). Heavy inventory slows both modes.\n
 
 			\n%c[pda_green]WHILE YOU TRAVEL\n
-			%c[pda_white]- %c[ui_gray_2]Dots show your route on the map. The game clock is frozen until you arrive or are interrupted.\n
-			%c[pda_white]- %c[ui_gray_2]Right-click the map and choose %c[pda_yellow]Cancel journey%c[ui_gray_2] (or Back/Esc) to stop - you stay where you started and lose no time.\n
-			%c[pda_white]- %c[ui_gray_2]When you arrive, hunger, thirst, and tiredness catch up for the trip time. Longer trips (sneaking, heavy loads) cost more.\n
+			%c[pda_white]- %c[ui_gray_2]Dots show your route. The game clock is frozen until you arrive or are interrupted.\n
+			%c[pda_white]- %c[ui_gray_2]Right-click the map and choose %c[pda_yellow]Cancel journey%c[ui_gray_2] (or Back/Esc) to stop - you stay where you started.\n
 
 			\n%c[pda_green]ENCUMBRANCE (INVENTORY WEIGHT)\n
-			%c[pda_white]- %c[ui_gray_2]Uses the same weight colours as your inventory screen - not the HUD encumbrance icon.\n
-			%c[pda_white]- %c[pda_yellow]White weight%c[ui_gray_2]: normal map travel speed.\n
-			%c[pda_white]- %c[pda_yellow]Yellow weight%c[ui_gray_2] (within 10 kg of max carry): %c[pda_yellow]-20%%%c[ui_gray_2] map speed; trips take about 25%% longer.\n
-			%c[pda_white]- %c[pda_yellow]Red weight%c[ui_gray_2] (over max carry): %c[pda_yellow]-50%%%c[ui_gray_2] map speed; trips take twice as long.\n
-			%c[pda_white]- %c[pda_yellow]Too encumbered to move%c[ui_gray_2] (cannot walk in the world): you cannot start walk or sneak travel. %c[pda_yellow]Hire guide%c[ui_gray_2] still works - guides carry your gear.\n
+			%c[pda_white]- %c[ui_gray_2]Uses the same weight colours as your inventory screen.\n
+			%c[pda_white]- %c[pda_yellow]White weight%c[ui_gray_2]: normal bar speed.\n
+			%c[pda_white]- %c[pda_yellow]Yellow weight%c[ui_gray_2] (within 10 kg of max carry): %c[pda_yellow]-20%%%c[ui_gray_2] bar speed.\n
+			%c[pda_white]- %c[pda_yellow]Red weight%c[ui_gray_2] (over max carry): %c[pda_yellow]-50%%%c[ui_gray_2] bar speed.\n
+			%c[pda_white]- %c[pda_yellow]Too encumbered to move%c[ui_gray_2]: cannot start Travel or Sneak. %c[pda_yellow]Hire guide%c[ui_gray_2] still works.\n
 
 			\n%c[pda_green]SNEAKING SKILL\n
-			%c[pda_white]- %c[ui_gray_2]Gained by sneaking past threats and finishing sneak journeys. Open the skills menu (%c[pda_yellow]K%c[ui_gray_2] by default) for exact stats.\n
-			%c[pda_white]- %c[ui_gray_2]Each level adds (approx.):\n
-			%c[pda_white]  - %c[pda_yellow]+3%%%c[ui_gray_2] ambush dodge chance\n
-			%c[pda_white]  - %c[pda_yellow]+2%%%c[ui_gray_2] PDA map travel speed\n
-			%c[pda_white]  - %c[pda_yellow]+1 m%c[ui_gray_2] extra distance when ambushes drop you short of your goal\n
-			%c[pda_white]- %c[ui_gray_2]Everyone starts with about %c[pda_yellow]20%%%c[ui_gray_2] base dodge before Sneaking bonuses.\n
+			%c[pda_white]- %c[ui_gray_2]Gained by dodging threats and finishing sneak journeys. Skills menu (%c[pda_yellow]K%c[ui_gray_2] by default) shows your stats.\n
+			%c[pda_white]- %c[ui_gray_2]Each level adds:\n
+			%c[pda_white]  - %c[pda_yellow]+3%%%c[ui_gray_2] ambush dodge (Sneak mode only)\n
+			%c[pda_white]  - %c[pda_yellow]+2%%%c[ui_gray_2] PDA bar speed on sneak trips\n
+			%c[pda_white]  - %c[pda_yellow]+1 m%c[ui_gray_2] ambush drop distance\n
+			%c[pda_white]- %c[ui_gray_2]Sneak dodge starts at %c[pda_yellow]25%%%c[ui_gray_2] before skill bonuses (cap %c[pda_yellow]85%%%c[ui_gray_2]). Travel mode has %c[pda_yellow]0%%%c[ui_gray_2] dodge.\n
+			%c[pda_white]- %c[ui_gray_2]Sneak trips shorten with level: %c[pda_yellow]-5 min per km%c[ui_gray_2] (down to about %c[pda_yellow]80 min/km%c[ui_gray_2] at high level).\n
 
-			\n%c[pda_green]AMBUSHES\n
-			%c[pda_white]- %c[ui_gray_2]You cannot start travel with enemies within about %c[pda_yellow]50 m%c[ui_gray_2].\n
-			%c[pda_white]- %c[ui_gray_2]Along the route, patrols may spot you. Your %c[pda_yellow]dodge chance%%%c[ui_gray_2] (Sneaking skill + sneak mode only) is shown when you pick Travel or Sneak. If you fail, you are dropped short and must fight.\n
-			%c[pda_white]- %c[pda_yellow]Sneak here%c[ui_gray_2] doubles your dodge chance (up to %c[pda_yellow]95%%%c[ui_gray_2] cap).\n
-			%c[pda_white]- %c[pda_yellow]Hire guide%c[ui_gray_2] trips cannot be ambushed.\n
+			\n%c[pda_green]STARTING A TRIP\n
+			%c[pda_white]- %c[ui_gray_2]You cannot start if enemies are within ambush detection range - %c[pda_yellow]Travel or Sneak%c[ui_gray_2], no exceptions.\n
 
-			\n%c[pda_green]VISIBILITY (TIME AND WEATHER)\n
-			%c[pda_white]- %c[ui_gray_2]How far patrols can spot you along the route (ambush scan radius). Does not change dodge chance.\n
-			%c[pda_white]- %c[pda_yellow]Day%c[ui_gray_2] (7 AM - 7 PM): %c[pda_yellow]50 m%c[ui_gray_2]. %c[pda_yellow]Dawn/dusk%c[ui_gray_2] (6-7 AM, 7-8 PM): %c[pda_yellow]40 m%c[ui_gray_2]. %c[pda_yellow]Night%c[ui_gray_2] (8 PM - 6 AM): %c[pda_yellow]30 m%c[ui_gray_2].\n
-			%c[pda_white]- %c[ui_gray_2]Weather tightens visibility (best only, subtracted from time-of-day base): %c[pda_yellow]rain -10 m%c[ui_gray_2], %c[pda_yellow]storm -15 m%c[ui_gray_2], %c[pda_yellow]fog -20 m%c[ui_gray_2]. Minimum %c[pda_yellow]10 m%c[ui_gray_2].\n
-			%c[pda_white]- %c[ui_gray_2]Examples: night rain %c[pda_yellow]20 m%c[ui_gray_2]; night fog %c[pda_yellow]10 m%c[ui_gray_2]; day fog %c[pda_yellow]30 m%c[ui_gray_2].\n
+			\n%c[pda_green]AMBUSH DETECTION RANGE\n
+			%c[pda_white]- %c[ui_gray_2]How far patrols can spot you. Day base %c[pda_yellow]60 m%c[ui_gray_2]. Time and weather %c[pda_yellow]stack%c[ui_gray_2] (subtract from base):\n
+			%c[pda_white]  - %c[pda_yellow]Twilight%c[ui_gray_2] (6-7 AM, 7-8 PM): %c[pda_yellow]-10 m%c[ui_gray_2]\n
+			%c[pda_white]  - %c[pda_yellow]Night%c[ui_gray_2] (8 PM - 6 AM): %c[pda_yellow]-20 m%c[ui_gray_2]\n
+			%c[pda_white]  - %c[pda_yellow]Rain -10 m%c[ui_gray_2], %c[pda_yellow]storm -15 m%c[ui_gray_2], %c[pda_yellow]fog -20 m%c[ui_gray_2]\n
+			%c[pda_white]- %c[ui_gray_2]Sneak range: %c[pda_yellow]20-60 m%c[ui_gray_2]. Travel adds %c[pda_yellow]+10 m%c[ui_gray_2] (sprinting): %c[pda_yellow]30-70 m%c[ui_gray_2].\n
+			%c[pda_white]- %c[ui_gray_2]Examples (sneak): clear day %c[pda_yellow]60 m%c[ui_gray_2]; night rain %c[pda_yellow]30 m%c[ui_gray_2]; night fog %c[pda_yellow]20 m%c[ui_gray_2].\n
+			%c[pda_white]- %c[ui_gray_2]Spotting also counts if an enemy is within %c[pda_yellow]10 m%c[ui_gray_2] above/below you, or has a clear line of sight.\n
 
-			\n%c[pda_green]GUIDE FEES\n
-			%c[pda_white]- %c[ui_gray_2]Per kilometre: Easy %c[pda_yellow]2000 RU%c[ui_gray_2], Medium %c[pda_yellow]2500 RU%c[ui_gray_2], Hard %c[pda_yellow]3000 RU%c[ui_gray_2]. Ignores weight limits and ambushes.\n
+			\n%c[pda_green]IF YOU ARE AMBUSHED\n
+			%c[pda_white]- %c[pda_yellow]Travel%c[ui_gray_2]: always fight - no dodge. You are dropped short; hostiles are alerted.\n
+			%c[pda_white]- %c[pda_yellow]Sneak%c[ui_gray_2]: dodge chance shown on the menu. Fail = dropped short and hostiles alerted.\n
+			%c[pda_white]- %c[ui_gray_2]Drop distance starts at detection range, then %c[pda_yellow]Travel -10 m%c[ui_gray_2] (reckless) or %c[pda_yellow]Sneak +10 m%c[ui_gray_2] (cautious), plus %c[pda_yellow]+1 m%c[ui_gray_2] per Sneaking level. Range %c[pda_yellow]20-80 m%c[ui_gray_2].\n
+			%c[pda_white]- %c[ui_gray_2]Hostiles waiting at your destination use the same rules. Sneak dodge can mean a clean arrival.\n
 
 			\n%c[pda_green]SETTINGS\n
-			%c[pda_white]- %c[pda_yellow]MCM > Dorn's Fast Travel%c[ui_gray_2]: top travel speed when lightly loaded, and how long PDA messages stay on screen.\n
+			%c[pda_white]- %c[pda_yellow]MCM > Dorn's Fast Travel%c[ui_gray_2]: how long travel messages stay on screen.\n
 
 			\n%c[pda_white]Good hunting, stalker!
 		</text>
