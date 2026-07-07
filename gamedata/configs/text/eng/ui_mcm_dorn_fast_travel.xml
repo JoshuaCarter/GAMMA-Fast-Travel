@@ -15,13 +15,13 @@
 		<text>Development</text>
 	</string>
 	<string id="ui_mcm_dorn_fast_travel_debug_overlay">
-		<text>Debug Overlay</text>
+		<text>Enable debug overlay</text>
 	</string>
 	<string id="ui_mcm_dorn_fast_travel_debug_overlay_desc">
-		<text>Show on-screen travel debug info.</text>
+		<text>Show travel debug info in the debug overlay.</text>
 	</string>
 	<string id="ui_mcm_dorn_fast_travel_debug_log">
-		<text>Debug Log</text>
+		<text>Enable debug logging</text>
 	</string>
 	<string id="ui_mcm_dorn_fast_travel_debug_log_desc">
 		<text>Write extra travel details to the game log.</text>

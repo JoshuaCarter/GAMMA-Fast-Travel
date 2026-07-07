@@ -153,10 +153,29 @@ function dft_set_fft_trip_in_progress(active)
     _G.game_fast_travel.trip_in_progress = active and true or false
 end
 
--- In-game seconds since this save was started - a plain number so it save_var/load_var cleanly
--- (unlike CTime), and immune to real-world clock/timezone weirdness. Used for the sneak cooldown.
+-- In-game seconds since a fixed anchor point, persisted on the actor so it survives saves,
+-- level changes, and quickloads alike. Used for the sneak cooldown. NOTE: this deliberately
+-- does NOT use level.get_start_time() - that resets on every level change (and every save
+-- reload), which silently corrupted the cooldown any time a sneak journey crossed a zone
+-- boundary (i.e. almost always, since that's the whole point of fast travel). The anchor
+-- itself is just the first game-time snapshot ever taken this save; only its absolute
+-- distance to "now" matters, so it never needs to be recomputed once set.
 function dft_time_elapsed()
-    local ok, secs = pcall(function() return game.get_game_time():diffSec(level.get_start_time()) end)
+    if not db.actor then return 0 end
+    local anchor_fields = load_var(db.actor, dft_save_vars.time_anchor, nil)
+    local ok, secs = pcall(function()
+        local now = game.get_game_time()
+        local anchor = now
+        if anchor_fields then
+            anchor = game.CTime()
+            anchor:set(anchor_fields.Y, anchor_fields.M, anchor_fields.D,
+                anchor_fields.h, anchor_fields.m, anchor_fields.s, anchor_fields.ms)
+        else
+            local Y, M, D, h, m, s, ms = now:get(0, 0, 0, 0, 0, 0, 0)
+            save_var(db.actor, dft_save_vars.time_anchor, { Y = Y, M = M, D = D, h = h, m = m, s = s, ms = ms })
+        end
+        return now:diffSec(anchor)
+    end)
     return ok and math.floor(secs) or 0
 end
 
@@ -279,6 +298,7 @@ _G.dft_save_vars = {
     stats_pos  = "dft_sp",
     progress_ratio = "dft_pr", -- 0-1 fraction of the trip completed at save time (used for refund on cancel)
     sneak_cd   = "dft_scd", -- dft_time_elapsed() value at which the next sneak journey is allowed
+    time_anchor = "dft_ta", -- {Y,M,D,h,m,s,ms} game-time snapshot dft_time_elapsed() measures from
 }
 
 _G.dft_door_keywords = {
@@ -318,7 +338,10 @@ end
 function dft_log(fmt, ...)
     local cfg = _G.dft_config
     if not (cfg and cfg.debug_log) then return end
-    printf("[DFT] " .. dft_format_msg(fmt, ...))
+    local dft_dorn = _G.dft and _G.dft.dorn
+    if dft_dorn and dft_dorn.dbg then
+        dft_dorn.dbg.log("dorn_fast_travel", dft_format_msg(fmt, ...))
+    end
 end
 
 function dft_path_road_log_enabled()
@@ -330,11 +353,17 @@ end
 
 function dft_path_road_log(fmt, ...)
     if not dft_path_road_log_enabled() then return end
-    printf("[DFT path-road] " .. dft_format_msg(fmt, ...))
+    local dft_dorn = _G.dft and _G.dft.dorn
+    if dft_dorn and dft_dorn.dbg then
+        dft_dorn.dbg.log("dorn_fast_travel", "[path-road] " .. dft_format_msg(fmt, ...))
+    end
 end
 
 function dft_log_error(fmt, ...)
-    printf("[DFT ERROR] " .. dft_format_msg(fmt, ...))
+    local dft_dorn = _G.dft and _G.dft.dorn
+    if dft_dorn and dft_dorn.dbg then
+        dft_dorn.dbg.log("dorn_fast_travel", "[ERROR] " .. dft_format_msg(fmt, ...))
+    end
 end
 
 -- Player-facing text: edit gamedata/configs/text/eng/st_dorn_fast_travel.xml
@@ -379,7 +408,7 @@ function dft_dbg(order, msg, color)
     local cfg = _G.dft_config
     local dft_dorn = _G.dft.dorn
     if dft_dorn and dft_dorn.dbg and cfg and cfg.debug_overlay then
-        dft_dorn.dbg.write("dorn_fast_travel", order, msg, color)
+        dft_dorn.dbg.overlay("dorn_fast_travel", order, msg, color)
     end
 end
 

@@ -12,7 +12,7 @@ local dft_apply_final_stats, dft_cancel_journey_emission, dft_complete_travel_se
     dft_detect_ambush, dft_force_end_surge, dft_get_surge_manager, dft_is_emission_active,
     dft_journey_path_ratio, dft_plan_emission_interrupt, dft_play_fade_teleport,
     dft_seconds_until_surge, dft_should_emission_interrupt, dft_trigger_emission_interrupt,
-    dft_trigger_encounter
+    dft_trigger_encounter, dft_update_sneak_cooldown_hud
 local PP_FADE_ID = 22301
 local FADE_TELEPORT_DELAY_S = 0.5
 local TELEPORT_INVULN_S = 1.0
@@ -468,35 +468,41 @@ function dft_is_safety_active()
     if dft.is_traveling then return true end
     return dft.safety_until and dft.safety_until > time_global()
 end
--- Small always-on-top readout in the corner of the screen (visible whenever the PDA is open,
--- same as the debug overlay) showing the sneak-travel cooldown countdown. Independent of
--- dft.is_traveling - the cooldown can be ticking down while the player is doing anything else.
-local DFT_SNEAK_CD_STATIC = "dft_sneak_cd_hud"
-function dft_update_sneak_cooldown_hud()
-    local hud = get_hud and get_hud()
-    if not hud then return end
+-- Sneak-travel cooldown countdown, shown while the PDA map is open. Attached as a real child of
+-- the live PDA dialog (not a flat HUD overlay) so it renders as part of the PDA's own UI, moving
+-- correctly with the 3D holographic PDA (g_3d_pda) the same way the vanilla clock/battery readouts
+-- do. Independent of dft.is_traveling - the cooldown can tick down while doing anything else.
+local DFT_SNEAK_CD_XML = "ui_dorn_fast_travel_sneak_cd.xml"
+local DFT_SNEAK_CD_ID = "dft_sneak_cd_label"
+dft_update_sneak_cooldown_hud = function()
     local remaining = (dft_sneak_cooldown_remaining_secs and dft_sneak_cooldown_remaining_secs()) or 0
     local show = remaining > 0 and dft_is_pda_map_shown()
 
     if not show then
-        if hud:GetCustomStatic(DFT_SNEAK_CD_STATIC) then
-            hud:RemoveCustomStatic(DFT_SNEAK_CD_STATIC)
+        if dft._sneak_cd_label then
+            pcall(function() dft._sneak_cd_label:Show(false) end)
         end
         return
     end
 
-    local cs = hud:GetCustomStatic(DFT_SNEAK_CD_STATIC)
-    if not cs then
-        hud:AddCustomStatic(DFT_SNEAK_CD_STATIC, true)
-        cs = hud:GetCustomStatic(DFT_SNEAK_CD_STATIC)
+    local ok = pcall(function()
+        if not dft._sneak_cd_label then
+            local pda = ActorMenu.get_pda_menu()
+            if not pda then return end
+            local xml = CScriptXmlInit()
+            xml:ParseFile(DFT_SNEAK_CD_XML)
+            dft._sneak_cd_label = xml:InitTextWnd(DFT_SNEAK_CD_ID, pda)
+        end
+        local text = string.format(dft_str("dft_hud_sneak_cooldown"), dft_format_duration(remaining / 60))
+        dft._sneak_cd_label:SetTextColor(GetARGB(255, 255, 224, 64))
+        dft._sneak_cd_label:SetText(text)
+        dft._sneak_cd_label:Show(true)
+    end)
+    if not ok then
+        -- Construction/attach failed (e.g. engine rejected the foreign parent) - drop the
+        -- reference and quietly stay hidden rather than retry-spamming every tick.
+        dft._sneak_cd_label = nil
     end
-    if not cs then return end
-    local wnd = cs:wnd()
-    if not wnd then return end
-    -- Bottom-right-ish corner of the 1024x768 virtual UI canvas; tweak if it clips on your setup.
-    wnd:SetWndPos(vector2():set(700, 700))
-    local text = string.format(dft_str("dft_hud_sneak_cooldown"), dft_format_duration(remaining / 60))
-    wnd:TextControl():SetTextST("%c[255,255,224,64]" .. text)
 end
 
 -- ============================================================
