@@ -90,7 +90,25 @@ refresh_active_config = function()
     return dft.active_config
 end
 
+-- Any damage that would actually lower health during travel ends the journey - no need to
+-- guess at which hit types "count", the player can see what happened and figure out why.
 function actor_on_before_hit(shit, bone_id)
+    if dft.is_traveling then
+        -- The ambush outcome is already locked in once the dot/sound reveal fires (the brief
+        -- delay before dft_trigger_encounter actually teleports) - don't let a stray hit in
+        -- that window cancel the journey as a way to dodge the ambush that's already coming.
+        if dft.ambush_pending then
+            shit.power = 0
+            return
+        end
+        if (shit.power or 0) > 0 then
+            dft_log(" Journey interrupted by incoming damage (type=%s power=%.2f).",
+                tostring(shit.type), shit.power or 0)
+            dft_abort_journey("damage")
+        end
+        return
+    end
+
     if dft_is_safety_active() then
         dft_log(" Damage blocked by travel safety. Original power: %f, type: %d", shit.power, shit.type)
         shit.power = 0
@@ -102,9 +120,11 @@ function on_option_change()
     load_config()
 end
 
-function dft_abort_journey()
+function dft_abort_journey(reason)
     if not dft.is_traveling then return end
     if not (db.actor and db.actor:alive()) then return end
+
+    dft_close_pda_for_travel()
 
     local ratio = 0
     if dft.travel_dist and dft.travel_dist > 0 then
@@ -112,13 +132,17 @@ function dft_abort_journey()
     end
     local refund = dft_process_refund(ratio)
 
-    dft_log(" Journey cancelled (%.0f%% complete) - actor stays in place.", ratio * 100)
+    dft_log(" Journey cancelled (%.0f%% complete, reason=%s) - actor stays in place.", ratio * 100, tostring(reason or "manual"))
     dft_cleanup_dots()
     dft_stop_travel_logic()
     dft_clear()
 
-    local cancel_opts = { outcome = "cancelled" }
-    dft_msg(dft_journey_result_message(cancel_opts), dft_journey_result_style(cancel_opts))
+    if reason == "damage" then
+        dft_msg(dft_str("dft_msg_journey_cancelled_damage"), "warning")
+    else
+        local cancel_opts = { outcome = "cancelled" }
+        dft_msg(dft_journey_result_message(cancel_opts), dft_journey_result_style(cancel_opts))
+    end
 
     pcall(function() save_var(db.actor, "surge_immuned", false) end)
 end
@@ -294,7 +318,7 @@ function actor_on_first_update()
         if not (db.actor and alife()) then return false end
         if not dft.player_ready then return false end
 
-        local pos, lvid, gvid, final_gvid, f_pos, f_lvid = dft_load()
+        local pos, lvid, gvid, final_gvid, f_pos, f_lvid, ratio = dft_load()
         if not pos or not final_gvid then
             dft_log(" No pending journey found on load.")
             return true
@@ -305,48 +329,27 @@ function actor_on_first_update()
         -- completes instantly (same-level arrival), the next load won't re-trigger.
         save_var(db.actor, dft_save_vars.traveling, false)
 
-        dft_log(" Resuming journey state...")
+        -- A journey mid-flight in a loaded save is an interruption like any other (ambush,
+        -- damage, closing the PDA) - it does NOT resume. The PDA is obviously closed right
+        -- after a load anyway, and forcing it back open would defeat the "you have to keep
+        -- it open yourself" rule. The player just has to start a new journey from here.
+        -- Time only ever moves forward when we actually teleport the player somewhere (arrival,
+        -- ambush, emission interrupt) - a cancel is a cancel, so no time is skipped here either,
+        -- same as closing the PDA or taking damage cancels the trip with no time jump.
+        ratio = math.max(0, math.min(ratio or 0, 1.0))
+        dft_log(" Journey was mid-flight at save time (%.0f%% complete) - ending it, not resuming.", ratio * 100)
+
         dft_set_safety_active(60.0)
-        dft_check_and_skip_surges()
-
-        local gg = game_graph()
-        local actor_lid = gg:vertex(db.actor:game_vertex_id()):level_id()
-        local final_lid = gg:vertex(final_gvid):level_id()
-
-        dft.final_pos = f_pos
-        dft.final_lvid = f_lvid
 
         -- v1.9.4: Ensure companions are with the actor immediately after level load
         dft_teleport_companions(db.actor:position(), db.actor:level_vertex_id(), db.actor:game_vertex_id())
 
-        if actor_lid ~= final_lid then
-            dft_log(" Clearing stale cross-zone journey state after level load.")
-            dft_clear()
-            return true
-        end
+        dft_process_refund(ratio)
 
-        pcall(function()
-            if level then
-                level.enable_input()
-            end
+        pcall(function() if level then level.enable_input() end end)
 
-            if db.actor and db.actor.activate_slot then
-                db.actor:activate_slot(8)
-            end
-            CreateTimeEvent("dft", "reopen_pda_dialog", 0.15, function()
-                if ActorMenu and ActorMenu.get_pda_menu then
-                    local pda = ActorMenu.get_pda_menu()
-                    if pda and not pda:IsShown() then
-                        pda:ShowDialog(true)
-                        dft_log(" Reopened PDA map screen programmatically upon travel resume.")
-                    end
-                end
-                return true
-            end)
-        end)
-
-        dft_log(" Resuming journey after level load.")
-        dft_start_travel_sequence(f_pos or pos, f_lvid or lvid, final_gvid, false, final_gvid)
+        dft_msg(dft_journey_result_message({ outcome = "cancelled" }), dft_journey_result_style({ outcome = "cancelled" }))
+        dft_clear()
         return true
     end)
 end
@@ -356,7 +359,6 @@ function dft_menu_item_is_ours(text)
         dft_str("dft_menu_travel_here"),
         dft_str("dft_menu_sneaky_travel"),
         dft_str("dft_menu_hire_guide"),
-        dft_str("dft_menu_cancel_travel"),
         dft_str("dft_msg_cross_zone_denied"),
         dft_str("dft_msg_cannot_travel_here"),
         dft_str("dft_msg_too_encumbered"),
@@ -429,40 +431,6 @@ function dft_add_travel_menu_items(pui, id, is_lc, include_sneak)
 end
 
 
-function dft_menu_contains_text(pui, needle)
-    if not (pui and needle and needle ~= "") then return false end
-    local found = false
-    pcall(function()
-        if not (pui.GetItemsCount and pui.GetItemByIndex) then return end
-        local count = pui:GetItemsCount()
-        for i = 0, count - 1 do
-            local item = pui:GetItemByIndex(i)
-            if item then
-                local text = ""
-                pcall(function()
-                    local tc = item:GetTextItem()
-                    if tc then text = tc:GetText() or "" end
-                end)
-                if string.find(text, needle, 1, true) then
-                    found = true
-                    break
-                end
-            end
-        end
-    end)
-    return found
-end
-
-function dft_add_cancel_menu_item(pui)
-    local label = dft_str("dft_menu_cancel_travel")
-    if dft_menu_contains_text(pui, label) then
-        dft_log("menu: cancel already present - skip")
-        return
-    end
-    pui:AddItem(label)
-    dft_log("menu: added cancel (active journey)")
-end
-
 function dft_on_map_right_click(property_ui, map_table)
     if dft.right_click_avail then
         dft.menu_open_seq = (dft.menu_open_seq or 0) + 1
@@ -470,9 +438,6 @@ function dft_on_map_right_click(property_ui, map_table)
         dft.menu_path_cache = nil
     end
     dft_report_map_click(map_table, nil)
-    if dft.is_traveling and property_ui then
-        dft_add_cancel_menu_item(property_ui)
-    end
 end
 
 on_map_spot_menu_add_property_impl = function(pui, id, ln, hint)
@@ -499,11 +464,9 @@ on_map_spot_menu_add_property_impl = function(pui, id, ln, hint)
     dft_log_menu_diag(id, se_obj, ln, hint)
 
     if dft.is_traveling then
-        -- on_map_right_click runs after spot menus on modded engines; avoid duplicate cancel.
-        if not dft.right_click_avail then
-            dft_add_cancel_menu_item(pui)
-        end
-        return true
+        -- Journey is only cancelled by closing the PDA (or taking damage) now - no menu
+        -- items to add while a trip is already in progress.
+        return false
     end
 
     local is_lc = dft_is_pda_transition(id, se_obj)
@@ -596,6 +559,11 @@ on_map_spot_menu_add_property_impl = function(pui, id, ln, hint)
         return true
     end
 
+    if dft_is_place_like_spot(se_obj) then
+        dft_log("menu: unclassified place-like spot id=%s - showing cannot-travel", tostring(id))
+        return dft_add_cannot_travel_item(pui, id, "not_a_destination")
+    end
+
     dft_log("menu: skip (not a travel destination)")
     dft_clear_path_preview()
     return false
@@ -615,13 +583,6 @@ function on_map_spot_menu_property_clicked(pui, id, ln, t)
         local result = t or (pui and pui.GetResult and pui:GetResult())
         dft_log("menu click: id=%s ln=%s result=%s", tostring(id), tostring(ln), tostring(result))
         if not result then return end
-
-        if string.find(result, dft_str("dft_menu_cancel_travel"), 1, true) then
-            if dft.is_traveling then
-                dft_abort_journey()
-            end
-            return
-        end
 
         id = dft.last_menu_target_id or id
         ln = dft.last_menu_target_ln or ln
@@ -663,10 +624,4 @@ end
 function on_key_press(key)
     dft.player_ready = true
     if _G.dft_handle_dev_keys then _G.dft_handle_dev_keys(key) end
-    if not dft.is_traveling then return end
-    if not (db.actor and db.actor:alive()) then return end
-
-    if key == DIK_keys.DIK_BACK or key == DIK_keys.DIK_ESCAPE then
-        dft_abort_journey()
-    end
 end

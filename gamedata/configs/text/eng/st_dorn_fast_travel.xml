@@ -6,9 +6,6 @@
 	<string id="dft_menu_sneaky_travel">
 		<text>Sneak here</text>
 	</string>
-	<string id="dft_menu_cancel_travel">
-		<text>Cancel journey</text>
-	</string>
 	<string id="dft_menu_hire_guide">
 		<text>Hire guide</text>
 	</string>
@@ -60,6 +57,9 @@
 	</string>
 	<string id="dft_msg_journey_cancelled_emission">
 		<text>Journey cancelled - emission underway.</text>
+	</string>
+	<string id="dft_msg_journey_cancelled_damage">
+		<text>Journey cancelled due to taking damage.</text>
 	</string>
 	<string id="dft_summary_arrived">
 		<text>Destination reached after %s.</text>

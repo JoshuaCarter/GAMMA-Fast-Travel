@@ -32,6 +32,9 @@ local dft_defaults = {
     dot_path_ratio      = {},
     dot_done            = {},
     pending_dot_cleanup = nil, -- dot object IDs snapshotted at save time, released after load
+    pda_check_from      = nil, -- time_global() ms; PDA-closed checks are ignored before this
+    ambush_pending      = false, -- true during the brief delay between ambush detection and the actual teleport
+    target_stamina      = 1.0, -- end-of-travel stamina the post-arrival safety window should hold at
     path_preview_id     = nil,
     is_path_preview     = false,
     menu_open_seq       = 0,
@@ -90,6 +93,9 @@ _G.dft_travel = {
     encumbrance_yellow_buffer_kg = 10,
     encumbrance_yellow_speed   = 0.8,
     encumbrance_red_speed      = 0.5,
+    encumbrance_red_stamina    = 0.10, -- end-of-travel stamina when arriving over max carry weight
+    ambush_stamina_normal      = 0.50, -- end-of-travel stamina when ambushed in normal (non-sneak) mode
+    ambush_stamina_sneaky      = 1.00, -- end-of-travel stamina when ambushed while sneaking
 }
 
 _G.dft_guide_cost_per_km = 3000
@@ -140,6 +146,8 @@ _G.dft_arrival = {
 _G.dft_path = {
     dot_spot              = "dft_path_dot",
     dot_spot_pending      = "dft_path_dot_pending",
+    dot_spot_ambush       = "dft_path_dot_ambush", -- red: an ambush happened around here
+    dot_spot_dodge        = "dft_path_dot_dodge",  -- blue: a threat was dodged around here
     dot_spot_debug_vertex = "dft_path_debug_vertex",
     dot_spot_debug_edge   = "dft_path_debug_edge",
     dot_max_count         = 1000,
@@ -177,6 +185,7 @@ _G.dft_path = {
 
 _G.dft_path.dots = {
     _G.dft_path.dot_spot, _G.dft_path.dot_spot_pending,
+    _G.dft_path.dot_spot_ambush, _G.dft_path.dot_spot_dodge,
     _G.dft_path.dot_spot_debug_vertex, _G.dft_path.dot_spot_debug_edge,
 }
 
@@ -203,6 +212,7 @@ _G.dft_save_vars = {
     dot_count  = "dft_dc",
     stats_amb  = "dft_sa",
     stats_pos  = "dft_sp",
+    progress_ratio = "dft_pr", -- 0-1 fraction of the trip completed at save time (used for refund on cancel)
 }
 
 _G.dft_static_zone_map = {

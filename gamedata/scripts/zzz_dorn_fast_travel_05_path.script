@@ -1749,11 +1749,13 @@ function dft_purge_stuck_dot_pdas(include_path_spots)
             has_spot = (level.map_has_object_spot(obj.id, "primary_object") ~= 0)
                     or (level.map_has_object_spot(obj.id, "green_location") ~= 0)
             if include_path_spots then
-                has_spot = has_spot
-                    or (level.map_has_object_spot(obj.id, dft_path.dot_spot) ~= 0)
-                    or (level.map_has_object_spot(obj.id, dft_path.dot_spot_pending) ~= 0)
-                    or (level.map_has_object_spot(obj.id, dft_path.dot_spot_debug_vertex) ~= 0)
-                    or (level.map_has_object_spot(obj.id, dft_path.dot_spot_debug_edge) ~= 0)
+                local all_spots = dft_path.dots
+                for i = 1, #all_spots do
+                    if level.map_has_object_spot(obj.id, all_spots[i]) ~= 0 then
+                        has_spot = true
+                        break
+                    end
+                end
             end
         end)
         if not has_spot then return end
@@ -1831,6 +1833,47 @@ function dft_promote_path_dot(index)
         if level.map_has_object_spot(obj_id, dft_path.dot_spot) == 0 then
             level.map_add_object_spot_ser(obj_id, dft_path.dot_spot, "")
         end
+    end)
+end
+
+-- Index of the dot whose path-ratio is closest to the given ratio - used to find "the dot
+-- nearest where this just happened" for ambush/dodge feedback, regardless of whether that
+-- dot has already been promoted to green yet.
+function dft_nearest_dot_index_for_ratio(ratio)
+    local d_count = dft.dot_count or 0
+    if d_count == 0 then return nil end
+    local best_i, best_diff
+    for i = 1, d_count do
+        local r = dft.dot_path_ratio[i] or (i / (d_count + 1))
+        local diff = math.abs(r - ratio)
+        if not best_diff or diff < best_diff then
+            best_diff = diff
+            best_i = i
+        end
+    end
+    return best_i
+end
+
+-- Force the dot nearest to `ratio` to a specific outcome spot (red ambush / blue dodge)
+-- instead of the normal grey->green promotion, so the PDA map keeps a visible record of
+-- where along the route something actually happened.
+function dft_mark_dot_outcome(ratio, spot_name)
+    local idx = dft_nearest_dot_index_for_ratio(ratio)
+    if not idx then return end
+    if not dft.dot_ids[idx] then
+        dft_ensure_path_dot(idx, true)
+    end
+    dft.dot_done[idx] = true
+    local obj_id = dft.dot_ids[idx]
+    if not obj_id then return end
+    pcall(function()
+        local all_spots = dft_path.dots
+        for i = 1, #all_spots do
+            if level.map_has_object_spot(obj_id, all_spots[i]) ~= 0 then
+                level.map_remove_object_spot(obj_id, all_spots[i])
+            end
+        end
+        level.map_add_object_spot_ser(obj_id, spot_name, "")
     end)
 end
 

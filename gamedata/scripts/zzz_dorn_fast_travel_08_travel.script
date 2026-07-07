@@ -146,6 +146,7 @@ function dft_start_travel_sequence(pos, lvid, gvid, is_transition, final_gvid)
     dft.encounters_avoided = 0
     dft.arrival_forced_ambushes = 0
     dft.arrival_short_m = 0
+    dft.target_stamina = 1.0
     dft_dbg_clear()
     dft_dbg(0, string.format("Trip start | %.0fm | sneak %d%%", dft.travel_dist, dft_calc_sneak_chance(dft.travel_mode == "sneaky")), "cyan")
     dft.expected_duration = dft_game_minutes_for_dist(dft.travel_dist, dft.travel_mode == "sneaky", dft.encumbrance_time_mult)
@@ -159,6 +160,10 @@ function dft_start_travel_sequence(pos, lvid, gvid, is_transition, final_gvid)
     local refresh = _G.refresh_active_config or refresh_active_config
     if refresh then refresh() end
     dft.is_traveling = true
+    -- Grace window before "PDA must stay open" enforcement kicks in, covering the moment
+    -- right after starting travel (menu click) so that isn't mistaken for the player
+    -- closing the map themselves.
+    dft.pda_check_from = time_global() + 2000
     dft_save(dft.dest_pos, dft.dest_lvid, dft.dest_gvid, dft.final_gvid)
 
     dft_log(" Journey started (%s, %.0fm, ~%s).",
@@ -299,6 +304,19 @@ function dft_advance_travel_time_seconds(sec, opts)
     level.change_game_time(days, hrs, mins)
     dft_log(" advance_travel_time_seconds: +%ds -> %dd %dh %dm (allow_surge=%s)",
         total_sec, days, hrs, mins, tostring(opts.allow_surge == true))
+end
+
+-- The PDA map has to stay open for the whole journey (closing it is how you cancel now,
+-- instead of Escape/right-click) - so we need a reliable read of whether it's currently shown.
+function dft_is_pda_map_shown()
+    local shown = false
+    pcall(function()
+        if ActorMenu and ActorMenu.get_pda_menu then
+            local pda = ActorMenu.get_pda_menu()
+            if pda and pda:IsShown() then shown = true end
+        end
+    end)
+    return shown
 end
 
 function dft_close_pda_for_travel()
@@ -467,7 +485,11 @@ function dft_actor_on_update()
                 if db.actor.health < 0.8 then
                     db.actor.health = 0.8
                 end
-                pcall(function() db.actor.power = 1.0 end)
+                -- Full stamina by default (mid-journey, the abstracted skip shouldn't drain
+                -- it); once an outcome sets dft.target_stamina (ambush/encumbrance), hold that
+                -- value for the rest of the safety window instead of snapping back to full
+                -- every tick.
+                pcall(function() db.actor.power = dft.target_stamina or 1.0 end)
 
                 if not dft._was_sleeping then
                     if actor_status_sleep and actor_status_sleep.force_sleep then
@@ -511,21 +533,29 @@ function dft_actor_on_update()
         return
     end
 
-    if dft_should_emission_interrupt() then
-        dft_trigger_emission_interrupt()
-        return
-    end
+    -- Ambush already detected, waiting out the brief "you just saw the red dot/heard the
+    -- alarm" delay before the actual teleport - freeze everything else in the meantime.
+    if dft.ambush_pending then return end
 
-    -- Check and skip surges while actively traveling (throttled above)
-
+    -- Everything below (PDA-open check, emission interrupt, encounter/dot updates) only
+    -- needs to run a handful of times a second, not every render frame - IsShown()/emission
+    -- manager lookups add up over a multi-minute journey at 60-144fps.
     local tg = time_global()
     if tg < dft.next_update then return end
     local dt = (tg - dft.last_update_tg) / 1000
     dft.last_update_tg = tg
     dft.next_update    = tg + 100
 
-    local refresh = _G.refresh_active_config or refresh_active_config
-    local cfg = dft.active_config or (refresh and refresh()) or {}
+    if (not dft.pda_check_from or tg >= dft.pda_check_from) and not dft_is_pda_map_shown() then
+        dft_log(" Journey cancelled - PDA closed.")
+        dft_abort_journey()
+        return
+    end
+
+    if dft_should_emission_interrupt() then
+        dft_trigger_emission_interrupt()
+        return
+    end
 
     if tg > (dft.last_encounter_check or 0) + 12000 then
         dft.last_encounter_check = tg
@@ -540,9 +570,23 @@ function dft_actor_on_update()
             dft_lerp_pos(dft.start_pos, dft.dest_pos, cur_ratio, virtual_pos)
         end
 
+        local avoided_before = dft.encounters_avoided or 0
         if dft_detect_ambush(virtual_pos) then
-            dft_trigger_encounter()
+            dft_mark_dot_outcome(cur_ratio, dft_path.dot_spot_ambush)
+            dft_play_ambush_alert()
+            -- Give the player a beat to actually see the red dot and hear the alarm before
+            -- the screen fades and the encounter teleport fires.
+            dft.ambush_pending = true
+            CreateTimeEvent("dft", "ambush_reveal_delay", 0.5, function()
+                if dft.is_traveling and dft.ambush_pending then
+                    dft.ambush_pending = false
+                    dft_trigger_encounter()
+                end
+                return true
+            end)
             return
+        elseif (dft.encounters_avoided or 0) > avoided_before then
+            dft_mark_dot_outcome(cur_ratio, dft_path.dot_spot_dodge)
         end
     end
 
@@ -576,7 +620,6 @@ function dft_actor_on_update()
 end
 
 function dft_complete_travel_sequence()
-    dft_set_safety_active(60.0)  -- Strong GAMMA protection
     if db.actor then
         -- surge_immuned removed: it causes GAMMA to loop surges via start(true)
         dft_log(" Surge immunity set on complete_travel_sequence.")
@@ -591,8 +634,7 @@ function dft_complete_travel_sequence()
 
     dft_stop_travel_logic()
 
-    -- Skip any active surges before jumping the clock
-    dft_check_and_skip_surges()
+    -- Skip any active surges before jumping the clock (also (re)activates the safety window).
     dft_set_safety_active(60.0)
     pcall(function()
         if db.actor then
@@ -649,6 +691,11 @@ function dft_complete_travel_sequence()
     local gvid = dft.dest_gvid or (db.actor and db.actor:game_vertex_id()) or 0
     local arrival_targets = dft.arrival_ambush_targets
     local was_arrival_ambush = arrival_targets ~= nil
+    dft.target_stamina = dft_resolve_arrival_stamina(was_arrival_ambush, dft.travel_mode == "sneaky")
+    pcall(function() if db.actor then db.actor.power = dft.target_stamina end end)
+    if was_arrival_ambush then
+        dft_play_ambush_alert()
+    end
     if was_arrival_ambush and arrival_targets and final_pos then
         local post_nearest = dft_nearest_hostile_dist_m(final_pos, arrival_targets)
         dft_log(" Arrival post-snap: short_of_dest=%dm nearest_hostile=%sm pos=(%.1f,%.1f,%.1f)",
@@ -673,7 +720,6 @@ function dft_complete_travel_sequence()
 
         dft_advance_travel_time(1.0)
         dft_set_safety_active(90.0)
-        dft_check_and_skip_surges()
 
         CreateTimeEvent("dft", "safe_arrival", 0.8, function()
             if not db.actor then return true end
@@ -741,6 +787,14 @@ function dft_process_refund(ratio)
         dft_log(" Refunded %d RU from aborted journey.", refund)
     end
     return refund
+end
+
+-- Short PDA error/alarm blip (not a siren) - a heads-up that something found you,
+-- whether that's a mid-journey ambush or the "unavoidable" one waiting at the destination.
+function dft_play_ambush_alert()
+    pcall(function()
+        xr_sound.set_sound_play(db.actor:id(), "pda_alarm")
+    end)
 end
 
 function dft_detect_ambush(virtual_pos)
@@ -842,8 +896,7 @@ end
 function dft_trigger_encounter()
     local ratio = math.min(dft.current_dist / dft.travel_dist, 1.0)
 
-    -- Skip surges, wipe stats, then jump clock
-    dft_check_and_skip_surges()
+    -- Skip surges, wipe stats, then jump clock (dft_set_safety_active also skips surges).
     dft_set_safety_active(60.0)
     -- Immediately zero dangerous stats before time jump
     pcall(function()
@@ -853,6 +906,9 @@ function dft_trigger_encounter()
             db.actor.health      = 1.0
         end
     end)
+    dft.target_stamina = dft_resolve_arrival_stamina(true, dft.travel_mode == "sneaky")
+    pcall(function() if db.actor then db.actor.power = dft.target_stamina end end)
+
     -- Calculate safe encounter position BEFORE jumping time
     dft_log("!!! ENCOUNTER TRIGGERED at ratio %.2f - Start pos: %.1f %.1f %.1f", ratio, dft.start_pos.x, dft.start_pos.y, dft.start_pos.z)
     local encounter_pos = dft_get_safe_lvid_pos(ratio)
@@ -885,7 +941,6 @@ function dft_trigger_encounter()
         if ok then lvid = lv end
     end
     local gvid = db.actor and db.actor:game_vertex_id() or 0
-    local ambush_targets = dft.ambush_targets
 
     local function after_ambush_tp()
         if ambush_targets then
@@ -895,7 +950,6 @@ function dft_trigger_encounter()
 
         dft_advance_travel_time(ratio)
         dft_set_safety_active(90.0)
-        dft_check_and_skip_surges()
 
         dft_apply_final_stats()
         dft_process_refund(ratio)

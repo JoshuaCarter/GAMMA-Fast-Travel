@@ -1,4 +1,5 @@
-<!-- Dorn's Fast Travel: path dots on the PDA map (grey = ahead, green = passed) -->
+<!-- Dorn's Fast Travel: path dots on the PDA map (grey = ahead, green = passed,
+     blue = dodged a threat here, red = ambushed here) -->
 <dft_path_dot>
 	<level_map spot="dft_path_dot_spot"/>
 </dft_path_dot>
@@ -12,6 +13,20 @@
 <dft_path_dot_pending_spot x="0" y="0" width="4" height="4" alignment="c" scale="1" scale_min="1" scale_max="1.5" stretch="0">
 	<texture>ui_dorn_path_dot_grey</texture>
 </dft_path_dot_pending_spot>
+
+<dft_path_dot_ambush>
+	<level_map spot="dft_path_dot_ambush_spot"/>
+</dft_path_dot_ambush>
+<dft_path_dot_ambush_spot x="0" y="0" width="4" height="4" alignment="c" scale="1" scale_min="1" scale_max="1.5" stretch="0">
+	<texture>ui_dorn_path_dot_red</texture>
+</dft_path_dot_ambush_spot>
+
+<dft_path_dot_dodge>
+	<level_map spot="dft_path_dot_dodge_spot"/>
+</dft_path_dot_dodge>
+<dft_path_dot_dodge_spot x="0" y="0" width="4" height="4" alignment="c" scale="1" scale_min="1" scale_max="1.5" stretch="0">
+	<texture>ui_dorn_path_dot_blue</texture>
+</dft_path_dot_dodge_spot>
 
 <!-- Path preview debug: green = snapped navmesh vertex, grey = edge sample -->
 <dft_path_debug_vertex>

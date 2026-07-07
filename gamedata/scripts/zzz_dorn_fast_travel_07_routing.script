@@ -498,7 +498,10 @@ function dft_advance_travel_time(ratio, opts)
                     if db.actor.health and db.actor.health < 1.0 then
                         db.actor.health = 1.0
                     end
-                    pcall(function() db.actor.power = 1.0 end)
+                    -- Respect an already-decided arrival/ambush stamina outcome (dft.target_stamina)
+                    -- instead of always snapping back to full - this can run after that outcome
+                    -- has been set (e.g. the post-teleport time jump right after an ambush).
+                    pcall(function() db.actor.power = dft.target_stamina or 1.0 end)
                 end
             end)
         end

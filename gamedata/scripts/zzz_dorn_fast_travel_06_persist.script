@@ -24,6 +24,11 @@ function dft_save(pos, lvid, gvid, final_gvid)
     save_var(db.actor, dft_save_vars.cost,       dft.journey_cost or 0)
     save_var(db.actor, dft_save_vars.dot_count,  dft.dot_count or 12)
     save_var(db.actor, dft_save_vars.stats_amb,  dft.stats_ambushes or 0)
+    local progress_ratio = 0
+    if dft.travel_dist and dft.travel_dist > 0 then
+        progress_ratio = math.max(0, math.min((dft.current_dist or 0) / dft.travel_dist, 1.0))
+    end
+    save_var(db.actor, dft_save_vars.progress_ratio, progress_ratio)
     if dft.final_pos then
         save_var(db.actor, dft_save_vars.final_x, dft.final_pos.x)
         save_var(db.actor, dft_save_vars.final_y, dft.final_pos.y)
@@ -37,6 +42,10 @@ function dft_clear()
 
     -- v2.0.8: Reset runtime travel flag (closes double-click race window)
     dft.is_traveling = false
+    dft.ambush_pending = false
+    -- NOTE: target_stamina deliberately survives dft_clear() - it needs to keep holding
+    -- through the post-arrival safety window (up to ~90s after the journey itself ends).
+    -- It only resets at the start of the next journey (dft_start_travel_sequence).
 
     save_var(db.actor, dft_save_vars.traveling,  false)
     save_var(db.actor, dft_save_vars.final_gvid, false)
@@ -60,6 +69,7 @@ function dft_clear()
     save_var(db.actor, dft_save_vars.dest_raw_x, nil)
     save_var(db.actor, dft_save_vars.dest_raw_y, nil)
     save_var(db.actor, dft_save_vars.dest_raw_z, nil)
+    save_var(db.actor, dft_save_vars.progress_ratio, nil)
 
     dft.start_pos = nil
     dft.dest_pos = nil
@@ -136,7 +146,8 @@ function dft_load()
            load_var(db.actor, dft_save_vars.dest_gvid,  0),
            load_var(db.actor, dft_save_vars.final_gvid, false),
            f_pos,
-           load_var(db.actor, dft_save_vars.final_lvid, 0)
+           load_var(db.actor, dft_save_vars.final_lvid, 0),
+           load_var(db.actor, dft_save_vars.progress_ratio, 0)
 end
 
 -- Snapshot whatever dot PDA object IDs are live at the moment of any real save (fired via

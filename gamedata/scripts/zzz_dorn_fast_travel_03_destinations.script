@@ -63,6 +63,23 @@ function dft_is_pda_transition(id, se_obj)
     return dft_is_scripted_lc_restrictor(id, se_obj)
 end
 
+-- Same clsid family the mod already treats as potential destinations elsewhere (bases,
+-- campfires, level changers, scripted restrictors) - used to decide whether an *unclassified*
+-- PDA marker still deserves an explicit "Cannot travel here" instead of silence. Deliberately
+-- excludes stalkers/monsters/items/etc. so right-clicking an NPC or quest marker doesn't sprout
+-- a Dorn's Fast Travel menu item just because it happened to fire this callback.
+function dft_is_place_like_spot(se_obj)
+    if not se_obj then return false end
+    local cls = 0
+    local ok = pcall(function() cls = se_obj:clsid() end)
+    if not ok then return false end
+    if cls == clsid.smart_terrain then return true end
+    if clsid.zone_campfire and cls == clsid.zone_campfire then return true end
+    if cls == clsid.level_changer or (clsid.level_changer_s and cls == clsid.level_changer_s) then return true end
+    if cls == clsid.script_restr or cls == clsid.space_restrictor then return true end
+    return false
+end
+
 function dft_is_level_changer_spot(id)
     return dft_is_pda_transition(id)
 end
@@ -827,6 +844,7 @@ do
     _G.dft_get_level_changer_spot = dft_get_level_changer_spot
     _G.dft_is_pda_transition = dft_is_pda_transition
     _G.dft_is_scripted_lc_restrictor = dft_is_scripted_lc_restrictor
+    _G.dft_is_place_like_spot = dft_is_place_like_spot
     _G.dft_is_level_changer_spot = dft_is_level_changer_spot
     _G.dft_read_transition_dest_info = dft_read_transition_dest_info
     _G.dft_is_in_door_registry = dft_is_in_door_registry
