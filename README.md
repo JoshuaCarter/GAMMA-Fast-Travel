@@ -6,9 +6,9 @@ Adds free PDA simulated fast travel journeys though the zone using real pathing 
 
 Want to avoid the tedium of walking everywhere all the time but fast travel feel like cheating? Does intstantly teleporting all over the zone is hurting your immersion? Or maybe you find yourself tempted to lower the cost of fast travel just a little bit so you can afford to use it more often? No more! This mod allows you to avoid tedium of travel while mimimising harm to your immersion, but forces you to face the inherent dangers and costs of traveling through the zone.
 
-It does this by simulating a real journey through the zone on your PDA, using real path-finding and scanning for real hostiles. When your path approaches hostile NPCs, you get ambushed; you will be dropped short of your destination to deal with the threat. You can sneak for a chance to avoid hostile encounters, but the jouney will consume more time/thirst/hunger/sleep.
+It does this by simulating a real journey through the zone on your PDA, using real path-finding and scanning for real hostiles. When your path approaches hostile NPCs, you get ambushed; you will be dropped short of your destination to deal with the threat. You can sneak for a chance to avoid hostile encounters, but the jouney will consume more time/thirst/hunger/sleep, and it has a short cooldown.
 
-A new Sneaking skill lets you travel faster, get better at avoiding ambushes, and begin ambushes more safely, but you'll never remove all the danger.
+A new Sneaking skill lets you sneak more often, travel faster, get better at avoiding ambushes, and spawn further from an ambush, but you'll never remove all the danger.
 
 Instant fast travel to any base or stash in the world is still available, but twice as expensive than in base GAMMA (it's intended for rare/late-game use). The vast majority of the time, you should be doing journeys between zone transition points and dealing with ambushes along the way - it's still much faster than walking, and will get faster as your sneaking level improves as you can avoid more encounters.
 
@@ -18,7 +18,7 @@ Credit to *damage_zedd* and his **The Long Road Ahead** mod, which inspired me t
 
 ## Notes
 
-- This mod does NOT rely on Fair Fast Travel (and will suppress the FFT travel options).
+- This mod does **NOT** rely on the *Fair Fast Travel* mod (and will suppress the FFT travel options), nor does it rely on the *Limited Fast Travel* mod. You can uninstall both if you like (unless you have other mods that rely on them).
 
 ## Installation
 

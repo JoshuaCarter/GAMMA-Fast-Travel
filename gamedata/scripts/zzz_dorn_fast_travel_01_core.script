@@ -98,11 +98,63 @@ _G.dft_travel = {
     ambush_stamina_sneaky      = 1.00, -- end-of-travel stamina when ambushed while sneaking
 }
 
--- Guide fee: flat 2x GAMMA's own Fair Fast Travel guide rate - no per-level danger table to
--- maintain. FFT's default guide cost_coef is 2.25 RU/m (travel_destinations.ltx [gtcfg]
--- cost_coef, i.e. 2250 RU/km) before its own map-hazard/rank scaling; this is deliberately a
--- flat multiple of that everywhere, simpler than FFT's per-route/per-rank scaling.
-_G.dft_guide_cost_per_km = 4500
+-- Guide fee scales with how dangerous the origin/destination levels are on average (1.0 safest
+-- - 2.0 most dangerous, see dft_get_level_danger below). dft_guide_cost_per_km (the rate at
+-- cost multiplier 1.0, i.e. the safest possible route) x that multiplier is tuned so a guide
+-- trip costs roughly 2x what FFT's own guide travel would charge for the same trip (FFT default:
+-- 1500 RU/km flat, x(1 + avg map hazard 0.5-2.0) - hazard scaling applies by default regardless
+-- of FFT's "progressive cost" toggle) at every danger level, not just on average.
+_G.dft_guide_danger_mid = 1.3 -- fallback for any level missing from guide_danger.ltx
+_G.dft_guide_cost_per_km = 4500 -- RU per km at cost multiplier 1.0
+_G.dft_guide_costs = nil -- lazy-loaded from guide_danger.ltx on first use, see below
+
+-- gamedata/configs/scripts/dorn_fast_travel/guide_danger.ltx - values tuned from Fair Fast
+-- Travel's own [map_hazard_coefs] table since that's the best available reference for "how
+-- dangerous is this level", but kept as our own standalone ltx (easy to inspect/rebalance)
+-- rather than read from FFT at runtime, so this mod has zero dependency on FFT being installed.
+function dft_load_level_danger()
+    local danger = {}
+    local ini = ini_file("scripts\\dorn_fast_travel\\guide_danger.ltx")
+    if ini and ini:section_exist("dft_guide_costs") then
+        local ok_n, n = pcall(function() return ini:line_count("dft_guide_costs") end)
+        if ok_n and n and n > 0 then
+            for i = 0, n - 1 do
+                local ok_line, found, key, val = pcall(function() return ini:r_line("dft_guide_costs", i, "", "") end)
+                if ok_line and found and key then
+                    danger[key] = tonumber(val)
+                end
+            end
+        end
+    end
+    if not next(danger) then
+        dft_log_error("guide_danger.ltx missing/empty - guide fee will default to cost multiplier 1.3 everywhere")
+    end
+    return danger
+end
+
+function dft_get_level_danger(level_name)
+    if not _G.dft_guide_costs then
+        _G.dft_guide_costs = dft_load_level_danger()
+    end
+    return (level_name and _G.dft_guide_costs[level_name]) or dft_guide_danger_mid
+end
+
+-- Some third-party mods (e.g. Milspec PDA) read game_fast_travel.trip_in_progress to avoid
+-- misreading our journey's game-time jumps as elapsed real time (e.g. faction-access decay
+-- timers). We mirror our own travel state into that flag so those mods behave correctly whether
+-- or not Fair Fast Travel itself is installed - this never reads from or calls into FFT, it just
+-- writes a shared flag other mods may be watching.
+function dft_set_fft_trip_in_progress(active)
+    _G.game_fast_travel = _G.game_fast_travel or {}
+    _G.game_fast_travel.trip_in_progress = active and true or false
+end
+
+-- In-game seconds since this save was started - a plain number so it save_var/load_var cleanly
+-- (unlike CTime), and immune to real-world clock/timezone weirdness. Used for the sneak cooldown.
+function dft_time_elapsed()
+    local ok, secs = pcall(function() return game.get_game_time():diffSec(level.get_start_time()) end)
+    return ok and math.floor(secs) or 0
+end
 
 _G.dft_hostile = {
     radius_m   = 50,  -- legacy travel-block reference; ambush uses dft_ambush_radius_m
@@ -197,6 +249,11 @@ _G.dft_sneaking = {
     travel_speed_per_level = 2,   -- percent PDA map speed per level (fallback)
 }
 
+-- Sneak travel cooldown: no MCM option (this mod doesn't expose balance knobs) - 1h base,
+-- reduced 3min per Sneaking level, reaching exactly 0 at the skill's max level (20).
+_G.dft_sneak_cooldown_base_minutes = 60
+_G.dft_sneak_cooldown_reduction_per_level = 3
+
 _G.dft_save_vars = {
     traveling  = "dft_jt",
     dest_x     = "dft_dx",
@@ -217,6 +274,7 @@ _G.dft_save_vars = {
     stats_amb  = "dft_sa",
     stats_pos  = "dft_sp",
     progress_ratio = "dft_pr", -- 0-1 fraction of the trip completed at save time (used for refund on cancel)
+    sneak_cd   = "dft_scd", -- dft_time_elapsed() value at which the next sneak journey is allowed
 }
 
 _G.dft_static_zone_map = {
@@ -436,5 +494,9 @@ do
     _G.dft_msg = dft_msg
     _G.dft_msg_style_prefix = dft_msg_style_prefix
     _G.dft_msg_style_icon = dft_msg_style_icon
+    _G.dft_get_level_danger = dft_get_level_danger
+    _G.dft_load_level_danger = dft_load_level_danger
+    _G.dft_set_fft_trip_in_progress = dft_set_fft_trip_in_progress
+    _G.dft_time_elapsed = dft_time_elapsed
     printf("[DFT] core module loaded")
 end

@@ -18,6 +18,9 @@
 	<string id="dft_menu_guide_format">
 		<text>%s (%s, %s)</text>
 	</string>
+	<string id="dft_menu_sneak_cooldown_format">
+		<text>%s (resting, available in %s)</text>
+	</string>
 	<string id="dft_ru_amount">
 		<text>%d RU</text>
 	</string>
@@ -83,5 +86,13 @@
 	<!-- Guide -->
 	<string id="dft_msg_guide_paid">
 		<text>Guide hired: %d RU paid.</text>
+	</string>
+
+	<!-- Sneak cooldown -->
+	<string id="dft_msg_sneak_cooldown">
+		<text>You're worn out from sneaking - available again in %s.</text>
+	</string>
+	<string id="dft_hud_sneak_cooldown">
+		<text>Sneak cooldown: %s</text>
 	</string>
 </string_table>

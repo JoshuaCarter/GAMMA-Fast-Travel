@@ -401,9 +401,9 @@ function dft_add_cannot_travel_item(pui, id, reason)
 end
 
 function dft_add_guide_menu_item(pui, id, se_obj)
-    local dist = dft_guide_distance(nil, se_obj, id)
+    local dist, from_lid, to_lid = dft_guide_distance(nil, se_obj, id)
     local guide_text = dft_str("dft_menu_hire_guide")
-    local guide_cost = dft_calc_guide_cost(dist)
+    local guide_cost = dft_calc_guide_cost(dist, from_lid, to_lid)
     local dur_str = dft_format_duration(dft_calc_guide_duration_secs(dist) / 60)
     local cost_str = (guide_cost > 0) and string.format(dft_str("dft_ru_amount"), guide_cost) or dft_str("dft_menu_free")
     pui:AddItem(string.format(dft_str("dft_menu_guide_format"), guide_text, dur_str, cost_str))
@@ -424,7 +424,13 @@ function dft_add_travel_menu_items(pui, id, is_lc, include_sneak)
     end
     pui:AddItem(dft_format_travel_menu("dft_menu_travel_here", specs.dist_str, specs.dur_str, specs.sneak_normal))
     if include_sneak ~= false then
-        pui:AddItem(dft_format_travel_menu("dft_menu_sneaky_travel", specs.dist_str, specs.sneaky_dur_str, specs.sneak_sneaky))
+        local sneak_cd_remaining = dft_sneak_cooldown_remaining_secs and dft_sneak_cooldown_remaining_secs() or 0
+        if sneak_cd_remaining > 0 then
+            local wait_str = dft_format_duration(sneak_cd_remaining / 60)
+            pui:AddItem(string.format(dft_str("dft_menu_sneak_cooldown_format"), dft_str("dft_menu_sneaky_travel"), wait_str))
+        else
+            pui:AddItem(dft_format_travel_menu("dft_menu_sneaky_travel", specs.dist_str, specs.sneaky_dur_str, specs.sneak_sneaky))
+        end
     end
     dft_log("menu: added travel items id=%s dist=%.0f dur=%s sneak=%s", tostring(id), specs.dist or 0, specs.dur_str or "?", tostring(include_sneak ~= false))
     return true

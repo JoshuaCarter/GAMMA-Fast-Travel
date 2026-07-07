@@ -22,8 +22,8 @@
 			\n%c[pda_green]HOW TO TRAVEL\n
 			%c[pda_white]- %c[ui_gray_2]Open the PDA map and %c[pda_yellow]right-click%c[ui_gray_2] a destination - bases, campfires, zone exits, or your own stashes (works with anomalous stashes).\n
 			%c[pda_white]- %c[pda_yellow]Travel here%c[ui_gray_2]: Can only be used on the current map. %c[pda_yellow]Free. Fast. 30 minutes per km%c[ui_gray_2]. You will be  %c[pda_red]ambushed%c[ui_gray_2] by any hostiles you meet along the way.\n
-			%c[pda_white]- %c[pda_yellow]Sneak here%c[ui_gray_2]: Can only be used on the current map. %c[pda_yellow]Free. Slow. 3 hours per km%c[ui_gray_2]. You have a chance to avoid hostile encounters.\n
-			%c[pda_white]- %c[pda_yellow]Hire guide%c[ui_gray_2]: Hire a guide to safely and instantly take you to any base or stash in the game - he will also help you carry your stuff so there's no weight ristriction. %c[pda_yellow]3000 RU per km, Instant. 1 hour per km%c[ui_gray_2].\n
+			%c[pda_white]- %c[pda_yellow]Sneak here%c[ui_gray_2]: Can only be used on the current map. %c[pda_yellow]Free. Slow. 3 hours per km%c[ui_gray_2]. You have a chance to avoid hostile encounters. Has a short cooldown (shown on PDA map).\n
+			%c[pda_white]- %c[pda_yellow]Hire guide%c[ui_gray_2]: Hire a guide to safely and instantly take you to any base or stash in the game - he will also help you carry your stuff so there's no weight ristriction. %c[pda_yellow]RU per km (scales with danger, see below), Instant. 1 hour per km%c[ui_gray_2].\n
 
 			\n%c[pda_green]PDA SHOWS YOU JOURNEY\n
 			%c[pda_white]- %c[ui_gray_2]The PDA map shows the journey you're taking along a real path across the map. You can see the intended path in grey, and watch it change to green as you make progress.\n
@@ -38,13 +38,13 @@
 			%c[pda_white]- %c[ui_gray_2]50% slower when carry weight is red (over max carry weight) and you will end travel with 10% stamina.\n
 			%c[pda_white]- %c[ui_gray_2]Taking any damage will cancel an in-progress journey.\n
 			%c[pda_white]- %c[ui_gray_2]You must keep your PDA open for the duration of the journey.\n
-			%c[pda_white]- %c[ui_gray_2]Guide cost scales with distance and the danger levels of the to/from locations for your journey\n
+			%c[pda_white]- %c[ui_gray_2]Guide cost scales with distance and how dangerous the to/from locations are (approx double Fair Fast Travel's cost).\n
 
 			\n%c[pda_green]AMBUSHES\n
 			%c[pda_white]- %c[ui_gray_2]During a normal travel, hostiles will detect you if you travel within 60 meters of them. When this happens they will ambush you (you will be dropped short of your destination to confront the enemy). This range is reduced by environmental factors:\n
 			%c[pda_white]- %c[ui_gray_2]Time: Night -20m (7pm-7am), and -10m in the hour before/after night.\n
 			%c[pda_white]- %c[ui_gray_2]Weather: Rain -10m, Storm -15m, Fog -20m.\n
-			%c[pda_white]- %c[ui_gray_2]Your base sneak chance is 20%, but is increased by your Sneaking level (3%% per level).\n
+			%c[pda_white]- %c[ui_gray_2]Your base sneak chance is 25%, but is increased by your Sneaking level (3%% per level,  max dodge chance is 85%).\n
 			%c[pda_white]- %c[ui_gray_2]If you are ambushed during normal travel, your stamina will be at 50% (100% if sneaking).\n
 
 			\n%c[pda_green]SNEAKING SKILL\n
@@ -53,7 +53,8 @@
 			%c[pda_white]- %c[ui_gray_2]Each level adds:\n
 			%c[pda_white]  - %c[pda_yellow]+3%%c[ui_gray_2] chance to avoid hostile encounters when sneaking.\n
 			%c[pda_white]  - %c[pda_yellow]+2%%c[ui_gray_2] PDA sneaking progress speed (and thus reduces how much time/thirt/hunger/sleep you spend).\n
-			%c[pda_white]  - %c[pda_yellow]+1%c[ui_gray_2] to how many meters away an ambush will happen (making them less dangerous).\n
+			%c[pda_white]  - %c[pda_yellow]+1 meters%c[ui_gray_2] to spawn distance from an ambush (making them less dangerous).\n
+			%c[pda_white]  - %c[pda_yellow]-3 minutes%c[ui_gray_2] to cooldown time between sneak journeys (no cooldown at max level).\n
 
 			\n%c[pda_white]Good luck stalker...
 		</text>

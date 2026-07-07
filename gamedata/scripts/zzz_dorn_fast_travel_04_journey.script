@@ -39,6 +39,30 @@ function dft_get_sneaking_ambush_spawn_bonus()
     return dft_get_sneaking_level() * dft_ambush.offset_per_sneak
 end
 
+-- Sneak travel cooldown: 1h base, reduced 3min per Sneaking level (20 max level * 3min = 60min,
+-- so it fully disappears at max level). Normal travel and guide travel have no cooldown.
+function dft_sneak_cooldown_minutes()
+    local level = dft_get_sneaking_level() or 0
+    return math.max(0, dft_sneak_cooldown_base_minutes - level * dft_sneak_cooldown_reduction_per_level)
+end
+
+function dft_sneak_cooldown_remaining_secs()
+    if not db.actor then return 0 end
+    local minutes = dft_sneak_cooldown_minutes()
+    if minutes <= 0 then return 0 end
+    local ready_at = load_var(db.actor, dft_save_vars.sneak_cd, 0)
+    local remaining = ready_at - dft_time_elapsed()
+    return remaining > 0 and remaining or 0
+end
+
+-- Called when a sneak journey actually starts (not on cancel/fail-to-start).
+function dft_start_sneak_cooldown()
+    if not db.actor then return end
+    local minutes = dft_sneak_cooldown_minutes()
+    if minutes <= 0 then return end
+    save_var(db.actor, dft_save_vars.sneak_cd, dft_time_elapsed() + minutes * 60)
+end
+
 function dft_get_encounter_offset()
     local sneaky = dft.travel_mode == "sneaky"
     local radius = dft_ambush_radius_m(sneaky)
@@ -466,10 +490,18 @@ function dft_get_game_difficulty()
     return diff
 end
 
--- Flat rate - see dft_guide_cost_per_km comment in 01_core (a simple multiple of FFT's own
--- guide rate, no per-route lookup).
-function dft_calc_guide_cost(dist)
-    return math.floor((dist / 1000) * dft_guide_cost_per_km)
+-- Average of dft_get_level_danger (01_core) for the origin/destination - backed by our own
+-- guide_danger.ltx, no runtime dependency on Fair Fast Travel or anything else.
+function dft_guide_route_danger(from_lid, to_lid)
+    local from_d = dft_get_level_danger(dft_resolve_level_name(from_lid))
+    local to_d   = dft_get_level_danger(dft_resolve_level_name(to_lid))
+    return (from_d + to_d) / 2
+end
+
+-- dft_guide_cost_per_km is the rate at danger 1.0; the per-route danger average scales it up/down.
+function dft_calc_guide_cost(dist, from_lid, to_lid)
+    local danger = dft_guide_route_danger(from_lid, to_lid)
+    return math.floor((dist / 1000) * dft_guide_cost_per_km * danger)
 end
 
 -- Guide travel is no longer instant: 1 game-hour per straight-line PDA km, same distance the
@@ -521,8 +553,8 @@ function dft_do_guide_travel(id, ln)
     -- Guide travel: no journey/ambush/survival drain, but the clock still moves - 1hr per
     -- straight-line PDA km, same distance the fee is based on.
     local mapchange = dft_is_cross_zone_destination(obj, ln)
-    local dist = dft_guide_distance(pos, obj, id)
-    local cost = dft_calc_guide_cost(dist)
+    local dist, from_lid, to_lid = dft_guide_distance(pos, obj, id)
+    local cost = dft_calc_guide_cost(dist, from_lid, to_lid)
     local duration_secs = dft_calc_guide_duration_secs(dist)
     if cost > 0 and db.actor:money() < cost then
         dft_msg(string.format(dft_str("dft_msg_cannot_afford"), tostring(cost)), "warning")
@@ -551,6 +583,7 @@ function dft_do_guide_travel(id, ln)
         end
     end)
 
+    dft_set_fft_trip_in_progress(true)
     dft_set_safety_active(60.0)
     dft_advance_travel_time_seconds(duration_secs)
 
@@ -563,6 +596,10 @@ function dft_do_guide_travel(id, ln)
 
     CreateTimeEvent("dft", "guide_travel_safety", 1.0, function()
         dft_set_safety_active(30.0)
+        return true
+    end)
+    CreateTimeEvent("dft", "guide_travel_fft_flag", 1.0, function()
+        dft_set_fft_trip_in_progress(false)
         return true
     end)
 
@@ -618,4 +655,7 @@ do
     _G.dft_calc_guide_duration_secs = dft_calc_guide_duration_secs
     _G.dft_guide_distance = dft_guide_distance
     _G.dft_do_guide_travel = dft_do_guide_travel
+    _G.dft_sneak_cooldown_minutes = dft_sneak_cooldown_minutes
+    _G.dft_sneak_cooldown_remaining_secs = dft_sneak_cooldown_remaining_secs
+    _G.dft_start_sneak_cooldown = dft_start_sneak_cooldown
 end

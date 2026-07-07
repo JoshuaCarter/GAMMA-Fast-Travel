@@ -49,6 +49,7 @@ function dft_start_travel_sequence(pos, lvid, gvid, is_transition, final_gvid)
     -- v2.0.8: Set traveling flag immediately to close double-click race window.
     -- fail_start -> dft_clear will reset it if the travel attempt fails.
     dft.is_traveling = true
+    dft_set_fft_trip_in_progress(true)
 
     local function fail_start(message, style)
         if message then dft_msg(message, style) end
@@ -71,6 +72,13 @@ function dft_start_travel_sequence(pos, lvid, gvid, is_transition, final_gvid)
     local emission_blocks = _G.dft_emission_blocks_travel_start or dft_emission_blocks_travel_start
     if emission_blocks and emission_blocks() then
         return fail_start(dft_str("dft_msg_emission_active"), "warning")
+    end
+
+    if dft.travel_mode == "sneaky" then
+        local sneak_cd_remaining = dft_sneak_cooldown_remaining_secs()
+        if sneak_cd_remaining > 0 then
+            return fail_start(string.format(dft_str("dft_msg_sneak_cooldown"), dft_format_duration(sneak_cd_remaining / 60)), "warning")
+        end
     end
 
     local sneaky_start = dft.travel_mode == "sneaky"
@@ -165,6 +173,10 @@ function dft_start_travel_sequence(pos, lvid, gvid, is_transition, final_gvid)
     -- closing the map themselves.
     dft.pda_check_from = time_global() + 2000
     dft_save(dft.dest_pos, dft.dest_lvid, dft.dest_gvid, dft.final_gvid)
+
+    if dft.travel_mode == "sneaky" then
+        dft_start_sneak_cooldown()
+    end
 
     dft_log(" Journey started (%s, %.0fm, ~%s).",
         dft.is_transition and "zone exit" or dft.travel_mode,
@@ -466,10 +478,47 @@ function dft_is_safety_active()
     if dft.is_traveling then return true end
     return dft.safety_until and dft.safety_until > time_global()
 end
+-- Small always-on-top readout in the corner of the screen (visible whenever the PDA is open,
+-- same as the debug overlay) showing the sneak-travel cooldown countdown. Independent of
+-- dft.is_traveling - the cooldown can be ticking down while the player is doing anything else.
+local DFT_SNEAK_CD_STATIC = "dft_sneak_cd_hud"
+function dft_update_sneak_cooldown_hud()
+    local hud = get_hud and get_hud()
+    if not hud then return end
+    local remaining = (dft_sneak_cooldown_remaining_secs and dft_sneak_cooldown_remaining_secs()) or 0
+    local show = remaining > 0 and dft_is_pda_map_shown()
+
+    if not show then
+        if hud:GetCustomStatic(DFT_SNEAK_CD_STATIC) then
+            hud:RemoveCustomStatic(DFT_SNEAK_CD_STATIC)
+        end
+        return
+    end
+
+    local cs = hud:GetCustomStatic(DFT_SNEAK_CD_STATIC)
+    if not cs then
+        hud:AddCustomStatic(DFT_SNEAK_CD_STATIC, true)
+        cs = hud:GetCustomStatic(DFT_SNEAK_CD_STATIC)
+    end
+    if not cs then return end
+    local wnd = cs:wnd()
+    if not wnd then return end
+    -- Bottom-right-ish corner of the 1024x768 virtual UI canvas; tweak if it clips on your setup.
+    wnd:SetWndPos(vector2():set(700, 700))
+    local text = string.format(dft_str("dft_hud_sneak_cooldown"), dft_format_duration(remaining / 60))
+    wnd:TextControl():SetTextST("%c[255,255,224,64]" .. text)
+end
+
 -- ============================================================
 -- 6. Update Loop
 -- ============================================================
 function dft_actor_on_update()
+    local tg_ui = time_global()
+    if not dft._last_sneak_cd_ui_tick or (tg_ui - dft._last_sneak_cd_ui_tick) > 500 then
+        dft._last_sneak_cd_ui_tick = tg_ui
+        pcall(dft_update_sneak_cooldown_hud)
+    end
+
     if dft.is_traveling and dft_emission_started_unexpectedly() then
         dft_cancel_journey_emission()
         return
@@ -867,6 +916,7 @@ end
 
 function dft_stop_travel_logic()
     dft.is_traveling = false
+    dft_set_fft_trip_in_progress(false)
 end
 
 function dft_cleanup_dots()

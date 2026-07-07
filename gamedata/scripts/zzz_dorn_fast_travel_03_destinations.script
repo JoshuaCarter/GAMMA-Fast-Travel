@@ -349,17 +349,11 @@ function dft_object_level_id(se_obj, gvid)
     return nil
 end
 
--- Straight-line PDA map distance (global coords via per-level offsets from game.ltx).
+-- Straight-line PDA map distance (global coords via per-level offsets from game.ltx). No
+-- dependency on Fair Fast Travel or any other mod - offsets are read directly from game.ltx by
+-- dft_build_level_names_registry (see zzz_dorn_fast_travel_02_zones.script).
 function dft_pda_distance(pos_a, level_id_a, pos_b, level_id_b)
     if not (pos_a and pos_b) then return 0 end
-
-    if game_fast_travel and game_fast_travel.global_distance_between
-        and level_id_a and level_id_b then
-        local ok, dist = pcall(function()
-            return game_fast_travel.global_distance_between(pos_a, level_id_a, pos_b, level_id_b)
-        end)
-        if ok and dist and dist > 0 then return dist end
-    end
 
     if not level_id_a or not level_id_b or level_id_a == level_id_b then
         return dft_distance_pda(pos_a, pos_b) or pos_a:distance_to(pos_b)

@@ -42,6 +42,7 @@ function dft_clear()
 
     -- v2.0.8: Reset runtime travel flag (closes double-click race window)
     dft.is_traveling = false
+    dft_set_fft_trip_in_progress(false)
     dft.ambush_pending = false
     -- NOTE: target_stamina deliberately survives dft_clear() - it needs to keep holding
     -- through the post-arrival safety window (up to ~90s after the journey itself ends).
