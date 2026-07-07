@@ -466,6 +466,8 @@ function dft_get_game_difficulty()
     return diff
 end
 
+-- Flat rate - see dft_guide_cost_per_km comment in 01_core (a simple multiple of FFT's own
+-- guide rate, no per-route lookup).
 function dft_calc_guide_cost(dist)
     return math.floor((dist / 1000) * dft_guide_cost_per_km)
 end

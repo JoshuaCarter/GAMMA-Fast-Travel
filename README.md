@@ -10,6 +10,8 @@ It does this by simulating a real journey through the zone on your PDA, using re
 
 A new Sneaking skill lets you travel faster, get better at avoiding ambushes, and begin ambushes more safely, but you'll never remove all the danger.
 
+Instant fast travel to any base or stash in the world is still available, but twice as expensive than in base GAMMA (it's intended for rare/late-game use). The vast majority of the time, you should be doing journeys between zone transition points and dealing with ambushes along the way - it's still much faster than walking, and will get faster as your sneaking level improves as you can avoid more encounters.
+
 *This mod is intended to feel like a natural fit with base GAMMA by repsecting the existing rules of the world. It is highly opinionated and the many restrictions and modifiers that make using it feel fair are not configurable - if you want to "cheat" you'll have to disable the mod. Feedback is welcome but requests to make the mod more configurable are unlikely to be implmented; if it's not the default, then it probably doesn't fit the vision. Also this mod is nearly 10k lines long and doesn't need extra complexity.*
 
 Credit to *damage_zedd* and his **The Long Road Ahead** mod, which inspired me to make this.

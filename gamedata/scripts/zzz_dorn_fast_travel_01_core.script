@@ -98,7 +98,11 @@ _G.dft_travel = {
     ambush_stamina_sneaky      = 1.00, -- end-of-travel stamina when ambushed while sneaking
 }
 
-_G.dft_guide_cost_per_km = 3000
+-- Guide fee: flat 2x GAMMA's own Fair Fast Travel guide rate - no per-level danger table to
+-- maintain. FFT's default guide cost_coef is 2.25 RU/m (travel_destinations.ltx [gtcfg]
+-- cost_coef, i.e. 2250 RU/km) before its own map-hazard/rank scaling; this is deliberately a
+-- flat multiple of that everywhere, simpler than FFT's per-route/per-rank scaling.
+_G.dft_guide_cost_per_km = 4500
 
 _G.dft_hostile = {
     radius_m   = 50,  -- legacy travel-block reference; ambush uses dft_ambush_radius_m
