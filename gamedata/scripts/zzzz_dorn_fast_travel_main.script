@@ -2,7 +2,7 @@
 -- Module libs load first as zzz_dorn_fast_travel_*.script
 
 local MOD_ID = "dorn_fast_travel"
-local DORN_COMMON_VERSION = "dorn_common_3ea88f51" -- managed by sync-dorn-common.sh
+local DORN_COMMON_VERSION = "dorn_common_105895da" -- managed by sync-dorn-common.sh
 _G.dft_config = _G.dft_config or {}
 local dft_config = _G.dft_config
 local dft = _G.dft
@@ -622,7 +622,6 @@ on_map_spot_menu_property_clicked = function(pui, id, ln, t)
         dft_log_error("map_spot_menu_property_clicked error (id=%s ln=%s): %s", tostring(id), tostring(ln), tostring(err))
     end
 end
-
 
 on_key_press = function(key)
     dft.player_ready = true
