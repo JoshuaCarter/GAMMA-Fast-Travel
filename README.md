@@ -12,13 +12,13 @@ A new Sneaking skill lets you sneak more often, travel faster, get better at avo
 
 Instant fast travel to any base or stash in the world is still available, but twice as expensive than in base GAMMA (it's intended for rare/late-game use). The vast majority of the time, you should be doing journeys between zone transition points and dealing with ambushes along the way - it's still much faster than walking, and will get faster as your sneaking level improves as you can avoid more encounters.
 
-*This mod is intended to feel like a natural fit with base GAMMA by repsecting the existing rules of the world. It is highly opinionated and the many restrictions and modifiers that make using it feel fair are not configurable - if you want to "cheat" you'll have to disable the mod. Feedback is welcome but requests to make the mod more configurable are unlikely to be implmented; if it's not the default, then it probably doesn't fit the vision. Also this mod is nearly 10k lines long and doesn't need extra complexity.*
+*This mod is intended to feel like a natural fit with base GAMMA by repsecting the existing rules of the world and not keeping the game loop largely in tact. It is highly opinionated and the many restrictions and modifiers that make using it feel 'fair' are not configurable. If you want to "cheat" you'll have to disable/edit the mod - you may not care about that but I do - I want hard rules on fast travel. Feedback is welcome but requests to make the mod more configurable are unlikely to be implmented; if it's not suitable as the default for everyone (and me!), then it probably doesn't fit my vision for the mod. Also this mod already has thousands of line of code and doesn't need extra complexity.*
 
-Credit to *damage_zedd* and his **The Long Road Ahead** mod, which inspired me to make this.
+Credit to *damage_zedd* and his **[The Long Road Ahead](https://discord.com/channels/912320241713958912/1501468759020404736)** mod, which inspired me to make this. If you want something more configurable then definitely check his mod out!
 
 ## Notes
 
-- This mod does **NOT** rely on the *Fair Fast Travel* mod (and will suppress the FFT travel options), nor does it rely on the *Limited Fast Travel* mod. You can uninstall both if you like (unless you have other mods that rely on them).
+- This mod does **NOT** rely on the *Fair Fast Travel* mod (and will suppress the FFT travel options), nor does it rely on the *Limited Fast Travel* mod.
 
 ## Installation
 

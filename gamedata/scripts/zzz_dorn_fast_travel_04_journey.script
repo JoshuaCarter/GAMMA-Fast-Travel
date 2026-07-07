@@ -55,10 +55,18 @@ function dft_sneak_cooldown_remaining_secs()
     return remaining > 0 and remaining or 0
 end
 
--- Called when a sneak journey actually starts (not on cancel/fail-to-start).
-function dft_start_sneak_cooldown()
+-- Called whenever a sneak journey actually teleports the player somewhere (arrival, mid-journey
+-- ambush, or an emission cutting it short) - never on a plain cancel (PDA closed, damage taken),
+-- since nothing actually happened to the player in those cases. ratio is how much of the route
+-- was covered (1.0 for a full arrival, less for an ambush/emission partway through) - the
+-- cooldown scales down proportionally, so a journey cut short at 20% only costs 20% of the
+-- cooldown.
+function dft_start_sneak_cooldown(ratio)
     if not db.actor then return end
     local minutes = dft_sneak_cooldown_minutes()
+    if minutes <= 0 then return end
+    ratio = math.max(0, math.min(ratio or 1.0, 1.0))
+    minutes = minutes * ratio
     if minutes <= 0 then return end
     save_var(db.actor, dft_save_vars.sneak_cd, dft_time_elapsed() + minutes * 60)
 end

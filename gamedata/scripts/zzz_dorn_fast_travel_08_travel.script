@@ -174,9 +174,10 @@ function dft_start_travel_sequence(pos, lvid, gvid, is_transition, final_gvid)
     dft.pda_check_from = time_global() + 2000
     dft_save(dft.dest_pos, dft.dest_lvid, dft.dest_gvid, dft.final_gvid)
 
-    if dft.travel_mode == "sneaky" then
-        dft_start_sneak_cooldown()
-    end
+    -- Cooldown itself doesn't start here - only once the player is actually teleported
+    -- somewhere (dft_complete_travel_sequence / dft_trigger_encounter /
+    -- dft_trigger_emission_interrupt), so a plain cancel (PDA closed, damage taken) never
+    -- costs any cooldown at all.
 
     dft_log(" Journey started (%s, %.0fm, ~%s).",
         dft.is_transition and "zone exit" or dft.travel_mode,
@@ -350,6 +351,12 @@ function dft_trigger_emission_interrupt()
     ratio = math.max(0, math.min(ratio, 1.0))
     dft.emission_interrupt_pending = true
     dft_log("!!! EMISSION INTERRUPT at %.1f%% of route", ratio * 100)
+
+    -- Cut short by an emission partway through a sneak journey - same proportional cooldown
+    -- rule as an ambush. Grab dft.travel_mode now, before dft_clear() resets it further down.
+    if dft.travel_mode == "sneaky" then
+        dft_start_sneak_cooldown(ratio)
+    end
 
     dft_close_pda_for_travel()
     dft_cleanup_dots()
@@ -673,6 +680,12 @@ function dft_complete_travel_sequence()
         -- surge_immuned removed: it causes GAMMA to loop surges via start(true)
         dft_log(" Surge immunity set on complete_travel_sequence.")
     end
+    -- Full arrival - the player is about to be teleported having covered the whole route, so
+    -- the sneak cooldown (if this was a sneaky journey) starts now at its full duration. Grab
+    -- this before dft_clear() resets dft.travel_mode back to "normal" further down.
+    if dft.travel_mode == "sneaky" then
+        dft_start_sneak_cooldown(1.0)
+    end
     dft_cleanup_dots()
 
     -- Close PDA GUI and sheathe the physical device forcefully so the map is put away and engine messages/prompts render correctly!
@@ -945,6 +958,13 @@ end
 
 function dft_trigger_encounter()
     local ratio = math.min(dft.current_dist / dft.travel_dist, 1.0)
+
+    -- Ambushed partway through a sneak journey - only charge cooldown for the fraction of the
+    -- route actually covered (20% progress = 20% of the cooldown). Grab dft.travel_mode now,
+    -- before dft_clear() resets it back to "normal" further down.
+    if dft.travel_mode == "sneaky" then
+        dft_start_sneak_cooldown(ratio)
+    end
 
     -- Skip surges, wipe stats, then jump clock (dft_set_safety_active also skips surges).
     dft_set_safety_active(60.0)
