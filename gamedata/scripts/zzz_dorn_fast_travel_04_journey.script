@@ -361,15 +361,6 @@ function dft_calc_sneak_chance(sneaky_mode)
     return math.floor(chance)
 end
 
-function dft_dbg_sneak_summary(sneaky_mode, roll, chance, dodged)
-    local cfg = _G.dft_config
-    if not (cfg and cfg.debug_overlay) then return end
-    dft_dbg(0, string.format("Sneak %s | %d%% vs roll %d", sneaky_mode and "sneak" or "travel", chance, roll or 0), dodged and "green" or "yellow")
-    if dodged ~= nil then
-        dft_dbg(1, dodged and "Dodged encounter" or "Ambush triggered", dodged and "green" or "red")
-    end
-end
-
 dft_get_journey_specs = function(dist_m)
     local enc_mult = dft_get_encumbrance_time_mult()
     local normal_mins = dft_game_minutes_for_dist(dist_m, false, enc_mult)
@@ -616,7 +607,6 @@ do
     _G.dft_get_effective_pda_speed = dft_get_effective_pda_speed
     _G.dft_ambush_radius_m = dft_ambush_radius_m
     _G.dft_calc_sneak_chance = dft_calc_sneak_chance
-    _G.dft_dbg_sneak_summary = dft_dbg_sneak_summary
     _G.dft_journey_specs_for_object = dft_journey_specs_for_object
     _G.dft_ensure_sneaking_skill_options = dft_ensure_sneaking_skill_options
     _G.dft_award_sneaking_xp = dft_award_sneaking_xp

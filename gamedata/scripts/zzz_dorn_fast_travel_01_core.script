@@ -340,7 +340,7 @@ function dft_log(fmt, ...)
     if not (cfg and cfg.debug_log) then return end
     local dft_dorn = _G.dft and _G.dft.dorn
     if dft_dorn and dft_dorn.dbg then
-        dft_dorn.dbg.log("dorn_fast_travel", dft_format_msg(fmt, ...))
+        dft_dorn.dbg.log("dorn_fast_travel", " " .. dft_format_msg(fmt, ...))
     end
 end
 
@@ -396,27 +396,11 @@ function dft_object_on_loaded_level(se_obj)
     return ok_a and ok_o and actor_lid == obj_lid
 end
 
-
 function dft_is_cross_zone_destination(se_obj, ln)
     local cur_lvl = (level and level.name) and level.name() or nil
     if ln and cur_lvl and ln ~= cur_lvl then return true end
     if se_obj then return dft_destination_on_other_level(se_obj) end
     return false
-end
-
-function dft_dbg(order, msg, color)
-    local cfg = _G.dft_config
-    local dft_dorn = _G.dft.dorn
-    if dft_dorn and dft_dorn.dbg and cfg and cfg.debug_overlay then
-        dft_dorn.dbg.overlay("dorn_fast_travel", order, msg, color)
-    end
-end
-
-function dft_dbg_clear()
-    local dft_dorn = _G.dft.dorn
-    if dft_dorn and dft_dorn.dbg then
-        dft_dorn.dbg.clear_source("dorn_fast_travel")
-    end
 end
 
 function dft_is_trader_restrictor(name)
@@ -479,8 +463,6 @@ do
     _G.dft_destination_on_other_level = dft_destination_on_other_level
     _G.dft_object_on_loaded_level = dft_object_on_loaded_level
     _G.dft_is_cross_zone_destination = dft_is_cross_zone_destination
-    _G.dft_dbg = dft_dbg
-    _G.dft_dbg_clear = dft_dbg_clear
     _G.dft_is_trader_restrictor = dft_is_trader_restrictor
     _G.dft_msg = dft_msg
     _G.dft_get_level_danger = dft_get_level_danger

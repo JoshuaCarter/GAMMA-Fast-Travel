@@ -108,7 +108,7 @@ dft_ray_snap_ground_pos = function(pos, opts)
     if anchor and max_drift_m then
         local drift = dft_horizontal_dist(result, anchor)
         if drift and drift > max_drift_m then
-            dft_log(" ray snap drift %.0fm > %.0fm (%s ray) - rejected", drift, max_drift_m, ray_tag)
+            dft_log("ray snap drift %.0fm > %.0fm (%s ray) - rejected", drift, max_drift_m, ray_tag)
             return nil, nil
         end
     end
@@ -118,7 +118,7 @@ dft_ray_snap_ground_pos = function(pos, opts)
         local ok, v = pcall(function() return level.vertex_id(result) end)
         if ok and dft_valid_lvid(v) then lvid = v end
     end
-    dft_log(" ray snap (%s): ground Y=%.1f at (%.1f, %.1f, %.1f)", ray_tag, ground_y, x, result.y, z)
+    dft_log("ray snap (%s): ground Y=%.1f at (%.1f, %.1f, %.1f)", ray_tag, ground_y, x, result.y, z)
     return result, lvid
 end
 
@@ -136,7 +136,7 @@ function dft_find_ground_pos(pos, lvid, gvid, opts)
         local drift = (_G.dft_pos_drift and _G.dft_pos_drift(result_pos, anchor))
             or result_pos:distance_to(anchor)
         if drift > max_drift_m then
-            dft_log(" ground snap drift %.0fm > %.0fm at (%.0f, %.0f, %.0f) - keeping anchor",
+            dft_log("ground snap drift %.0fm > %.0fm at (%.0f, %.0f, %.0f) - keeping anchor",
                 drift, max_drift_m, anchor.x, anchor.y, anchor.z)
             return vector():set(anchor.x, anchor.y, anchor.z), result_lvid
         end
@@ -252,12 +252,12 @@ function dft_find_ground_pos(pos, lvid, gvid, opts)
             max_drift_m = max_drift_m,
         })
         if ray_pos then
-            dft_log(" ground snap: ray fallback at (%.1f, %.1f, %.1f)", ray_pos.x, ray_pos.y, ray_pos.z)
+            dft_log("ground snap: ray fallback at (%.1f, %.1f, %.1f)", ray_pos.x, ray_pos.y, ray_pos.z)
             return finish(ray_pos, ray_lvid or lvid)
         end
     end
 
-    dft_log(" WARN: ground snap failed at (%.1f, %.1f, %.1f) - keeping anchor", pos.x, pos.y, pos.z)
+    dft_log("WARN: ground snap failed at (%.1f, %.1f, %.1f) - keeping anchor", pos.x, pos.y, pos.z)
     return finish(vector():set(anchor.x, anchor.y, anchor.z), lvid)
 end
 
@@ -269,21 +269,21 @@ end
 function dft_apply_travel_offset(pos, offset_m)
     if not (pos and offset_m and offset_m > 0 and dft.start_pos and dft.dest_pos) then
         if offset_m and offset_m > 0 then
-            dft_log(" Travel offset skipped: missing start/dest (offset=%dm).", math.floor(offset_m + 0.5))
+            dft_log("Travel offset skipped: missing start/dest (offset=%dm).", math.floor(offset_m + 0.5))
         end
         return pos
     end
     local dir = vector():set(dft.dest_pos.x - dft.start_pos.x, 0, dft.dest_pos.z - dft.start_pos.z)
     local dir_len = math.sqrt(dir.x * dir.x + dir.z * dir.z)
     if dir_len < 0.1 then
-        dft_log(" Travel offset skipped: start/dest too close (offset=%dm).", math.floor(offset_m + 0.5))
+        dft_log("Travel offset skipped: start/dest too close (offset=%dm).", math.floor(offset_m + 0.5))
         return pos
     end
     dir:normalize()
     local along = (pos.x - dft.start_pos.x) * dir.x + (pos.z - dft.start_pos.z) * dir.z
     local pullback = math.min(offset_m, math.max(along, 0))
     if pullback < 0.1 then
-        dft_log(" Travel offset skipped: along-path %.1fm (offset=%dm).", along, math.floor(offset_m + 0.5))
+        dft_log("Travel offset skipped: along-path %.1fm (offset=%dm).", along, math.floor(offset_m + 0.5))
         return pos
     end
     local offset_pos = vector():set(pos.x - dir.x * pullback, pos.y, pos.z - dir.z * pullback)
@@ -295,7 +295,7 @@ function dft_apply_travel_offset(pos, offset_m)
     })
     local result = snapped or offset_pos
     local short_m = dft_horizontal_dist(result, pos) or result:distance_to(pos)
-    dft_log(" Travel offset: want=%dm pullback=%.0fm along=%.0fm short_of_dest=%.0fm pos=(%.1f,%.1f,%.1f)",
+    dft_log("Travel offset: want=%dm pullback=%.0fm along=%.0fm short_of_dest=%.0fm pos=(%.1f,%.1f,%.1f)",
         math.floor(offset_m + 0.5), pullback, along, short_m or 0, result.x, result.y, result.z)
     return result
 end
@@ -465,7 +465,7 @@ dft_place_ambush_landing = function(anchor_pos, targets, standoff_m, approach_po
         hostile_pos.z + (dz / horiz) * standoff_m
     )
     local cur_d = dft_horizontal_dist(anchor_pos, hostile_pos) or anchor_pos:distance_to(hostile_pos)
-    dft_log(" Ambush landing: %.0fm from hostile (was %.0fm from anchor) -> (%.1f,%.1f,%.1f)",
+    dft_log("Ambush landing: %.0fm from hostile (was %.0fm from anchor) -> (%.1f,%.1f,%.1f)",
         standoff_m, cur_d or -1, out.x, out.y, out.z)
     return out
 end
@@ -503,13 +503,13 @@ function dft_log_ambush_scan(label, scan_pos, radius, targets)
     if not (scan_pos and targets) then return end
     local ns = #(targets.squads or {})
     local nn = #(targets.npcs or {})
-    dft_log(" Ambush %s: radius=%dm scan=(%.1f,%.1f,%.1f) squads=%d npcs=%d",
+    dft_log("Ambush %s: radius=%dm scan=(%.1f,%.1f,%.1f) squads=%d npcs=%d",
         tostring(label), math.floor((radius or 0) + 0.5), scan_pos.x, scan_pos.y, scan_pos.z, ns, nn)
     for i = 1, ns do
         local squad = alife_object(targets.squads[i])
         if squad and squad.position then
             local d = dft_horizontal_dist(scan_pos, squad.position) or scan_pos:distance_to(squad.position)
-            dft_log("   squad id=%s dist=%.0fm pos=(%.1f,%.1f,%.1f)",
+            dft_log("  squad id=%s dist=%.0fm pos=(%.1f,%.1f,%.1f)",
                 tostring(targets.squads[i]), d or -1, squad.position.x, squad.position.y, squad.position.z)
         end
     end
@@ -521,7 +521,7 @@ function dft_log_ambush_scan(label, scan_pos, radius, targets)
                 local d = dft_horizontal_dist(scan_pos, np) or scan_pos:distance_to(np)
                 local name = "?"
                 pcall(function() name = npc:name() end)
-                dft_log("   npc id=%s %s dist=%.0fm pos=(%.1f,%.1f,%.1f)",
+                dft_log("  npc id=%s %s dist=%.0fm pos=(%.1f,%.1f,%.1f)",
                     tostring(targets.npcs[i]), name, d or -1, np.x, np.y, np.z)
             end
         end
@@ -564,7 +564,7 @@ dft_enforce_ambush_standoff = function(pos, targets, min_m, away_from)
     end
     local need = (min_m - best_d) + 1.0
     local out = vector():set(pos.x + dx / horiz * need, pos.y, pos.z + dz / horiz * need)
-    dft_log(" Ambush standoff: nearest hostile %.0fm < min %dm - pushed %.0fm to (%.1f,%.1f,%.1f)",
+    dft_log("Ambush standoff: nearest hostile %.0fm < min %dm - pushed %.0fm to (%.1f,%.1f,%.1f)",
         best_d, math.floor(min_m + 0.5), need, out.x, out.y, out.z)
     return out
 end
@@ -581,7 +581,7 @@ function dft_wake_ambush_squad_online(squad_id)
             end
         end
         if squad.update then squad:update() end
-        dft_log("   squad id=%s brought online (was offline).", tostring(squad_id))
+        dft_log("  squad id=%s brought online (was offline).", tostring(squad_id))
     end)
 end
 
@@ -606,7 +606,7 @@ function dft_ping_ambush_npc(npc_id, actor)
         h.power = power
         h.impulse = 0
         npc:hit(h)
-        dft_log("   npc id=%s %s pinged (torso wound, power=%.3f).", tostring(npc_id), name, power)
+        dft_log("  npc id=%s %s pinged (torso wound, power=%.3f).", tostring(npc_id), name, power)
     end)
     return true
 end
@@ -664,7 +664,7 @@ function dft_alert_ambushers(targets)
         end
     end
 
-    dft_log(" Ambush wake: %d squads brought online, %d NPCs pinged (no range limit).",
+    dft_log("Ambush wake: %d squads brought online, %d NPCs pinged (no range limit).",
         squads_online, npcs_pinged)
 end
 
@@ -691,24 +691,24 @@ function dft_resolve_arrival_position()
     if sneaky and chance > 0 then
         local roll = math.random(1, 100)
         if roll <= chance then
-            dft_log(" Arrival dodge: slipped past hostiles (roll %d <= %d%%).", roll, chance)
+            dft_log("Arrival dodge: slipped past hostiles (roll %d <= %d%%).", roll, chance)
             dft.encounters_avoided = (dft.encounters_avoided or 0) + 1
             dft.arrival_ambush_targets = nil
             return pos, 0
         end
-        dft_log(" Arrival ambush: dodge failed (roll %d > %d%%).", roll, chance)
+        dft_log("Arrival ambush: dodge failed (roll %d > %d%%).", roll, chance)
     else
-        dft_log(" Arrival ambush: travel mode (no dodge).")
+        dft_log("Arrival ambush: travel mode (no dodge).")
     end
 
     local offset = dft_get_encounter_offset()
-    dft_log(" Arrival ambush: encounter offset=%dm (mode=%s).", offset, sneaky and "sneak" or "travel")
+    dft_log("Arrival ambush: encounter offset=%dm (mode=%s).", offset, sneaky and "sneak" or "travel")
     local approach = dft.start_pos or pos
     local short_pos, snap_lvid = dft_finalize_ambush_landing(pos, targets, approach, { lvid = dft.dest_lvid })
     dft.arrival_ambush_targets = targets
     dft.arrival_short_m = math.floor(dft_horizontal_dist(short_pos, pos) or short_pos:distance_to(pos))
     local nearest = dft_nearest_hostile_dist_m(short_pos, targets)
-    dft_log(" Arrival ambush landing: short_of_dest=%dm nearest_hostile=%sm pos=(%.1f,%.1f,%.1f)",
+    dft_log("Arrival ambush landing: short_of_dest=%dm nearest_hostile=%sm pos=(%.1f,%.1f,%.1f)",
         dft.arrival_short_m, nearest and tostring(nearest) or "?", short_pos.x, short_pos.y, short_pos.z)
     return short_pos, 1
 end
@@ -1408,7 +1408,7 @@ dft_build_line_snap_path = function(start_pos, dest_pos)
         return nav_chain, nav_is_vertex, nav_len, nav_raw_or_reason
     end
 
-    dft_log_error(" path build: navmesh A* failed (%s) at start=%s dest=%s - using direct straight line.",
+    dft_log_error("path build: navmesh A* failed (%s) at start=%s dest=%s - using direct straight line.",
         tostring(nav_raw_or_reason), dft_vec_str(start_pos), dft_vec_str(dest_pos))
     local chain = {
         vector():set(start_pos.x, start_pos.y + 0.1, start_pos.z),
@@ -1524,7 +1524,7 @@ function dft_build_path_dots(start_pos, dest_pos)
     local chain, is_vertex, path_len = dft_build_line_snap_path(start_pos, dest_pos)
 
     if #chain < 2 then
-        dft_log(" path: build failed (%.0fm straight)", straight)
+        dft_log("path: build failed (%.0fm straight)", straight)
         dft.path_chain = nil
         dft.path_chain_is_vertex = nil
         return {}, straight
@@ -1541,7 +1541,7 @@ function dft_build_path_dots(start_pos, dest_pos)
     end
 
     local positions = dft_densify_polyline(chain, dft_path.dot_spacing_m)
-    dft_log(" path: %d pts (%d verts) -> %d dots @ %dm, %.0fm (straight %.0fm)",
+    dft_log("path: %d pts (%d verts) -> %d dots @ %dm, %.0fm (straight %.0fm)",
         #chain, vtx_count, #positions, dft_path.dot_spacing_m, path_len, straight)
 
     return positions, path_len
@@ -1593,7 +1593,7 @@ function dft_report_map_click(map_table, hint)
 
     pcall(function()
         for k, v in pairs(map_table) do
-            dft_log("  map_table.%s = %s", tostring(k), tostring(v))
+            dft_log(" map_table.%s = %s", tostring(k), tostring(v))
         end
     end)
 
@@ -1911,7 +1911,7 @@ dft_build_path_preview = function(id, is_lc)
     local dest = target.pos
     local dist = dft_distance_pda(start, dest) or start:distance_to(dest)
     if dist < 40 and not is_lc then
-        dft_log(" path preview: too close (%.0fm)", dist)
+        dft_log("path preview: too close (%.0fm)", dist)
         dft.is_path_preview = false
         dft.path_preview_id = nil
         return
@@ -1919,7 +1919,7 @@ dft_build_path_preview = function(id, is_lc)
 
     local chain, is_vertex, path_len, raw_chain = dft_build_line_snap_path(start, dest)
     if #chain < 2 then
-        dft_log(" path preview: pivot failed (%.0fm straight)", dist)
+        dft_log("path preview: pivot failed (%.0fm straight)", dist)
         dft.is_path_preview = false
         dft.path_preview_id = nil
         return
@@ -1943,7 +1943,7 @@ dft_build_path_preview = function(id, is_lc)
         dft.dot_positions[i] = m.pos
     end
     dft.dot_count = #markers
-    dft_log(" path preview: %d waypoints, %d debug markers, %d journey dots @ %dm (path %.0fm, straight %.0fm)",
+    dft_log("path preview: %d waypoints, %d debug markers, %d journey dots @ %dm (path %.0fm, straight %.0fm)",
         #chain, #markers, #journey_dots, dft_path.dot_spacing_m, path_len or dist, dist)
 
     local spawned = 0
@@ -1954,7 +1954,7 @@ dft_build_path_preview = function(id, is_lc)
         if dft.dot_ids[i] and not before then spawned = spawned + 1 end
     end
     if spawned < dft.dot_count then
-        dft_log(" path preview: spawned %d/%d map dots (alife_create may have failed for some)", spawned, dft.dot_count)
+        dft_log("path preview: spawned %d/%d map dots (alife_create may have failed for some)", spawned, dft.dot_count)
     end
 end
 

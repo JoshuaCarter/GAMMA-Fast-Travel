@@ -591,7 +591,7 @@ local function dft_resolve_travel_target_impl(id, ln, click_pos)
             if graph then lvid = graph.lvid end
         end
         if not (lvid and gvid) then
-            dft_log(" target lc id=%s: partial vertices lvid=%s gvid=%s anchor=%s",
+            dft_log("target lc id=%s: partial vertices lvid=%s gvid=%s anchor=%s",
                 tostring(id), tostring(lvid), tostring(gvid), dft_vec_str(anchor))
         end
 
@@ -690,7 +690,7 @@ local function dft_resolve_travel_target_impl(id, ln, click_pos)
     if graph_check and not on_actor_level then
         local drift = dft_pos_drift(pos, graph_check.pos)
         if drift and drift > dft_travel_max_alife_graph_drift then
-            dft_log(" target id=%s: pos vs graph drift %.0fm - using graph", id, drift)
+            dft_log("target id=%s: pos vs graph drift %.0fm - using graph", id, drift)
             pos = graph_check.pos
             lvid = graph_check.lvid
         end
@@ -728,9 +728,9 @@ local function dft_resolve_travel_target_impl(id, ln, click_pos)
                     end
                 end
             end
-            dft_log(" target id=%s: aligned to map click (%.0fm from object pos)", id, click_drift)
+            dft_log("target id=%s: aligned to map click (%.0fm from object pos)", id, click_drift)
         elseif click_drift and click_drift > dft_travel_max_click_drift then
-            dft_log(" target id=%s: click %.0fm from pos - using object position", id, click_drift)
+            dft_log("target id=%s: click %.0fm from pos - using object position", id, click_drift)
         end
     end
 

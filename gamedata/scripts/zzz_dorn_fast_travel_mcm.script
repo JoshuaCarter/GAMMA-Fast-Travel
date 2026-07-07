@@ -28,13 +28,6 @@ function on_mcm_load()
 				text = "ui_mcm_dorn_fast_travel_development_section",
 				gr = {
 					{
-						id = "debug_overlay",
-						type = "check",
-						val = 1,
-						def = false,
-						hint = "dorn_fast_travel_debug_overlay",
-					},
-					{
 						id = "debug_log",
 						type = "check",
 						val = 1,

@@ -113,7 +113,7 @@ function dft_start_travel_sequence(pos, lvid, gvid, is_transition, final_gvid)
         dft.dest_raw_pos = vector():set(safe_pos.x, safe_pos.y, safe_pos.z)
         dft.dest_lvid = safe_lvid or lvid
         dft.dest_gvid = gvid
-        dft_log(" Traveling to zone exit on current map.")
+        dft_log("Traveling to zone exit on current map.")
     elseif actor_lid ~= dest_lid then
         return fail_start(dft_str("dft_msg_cross_zone_denied"), "warning")
     else
@@ -144,7 +144,7 @@ function dft_start_travel_sequence(pos, lvid, gvid, is_transition, final_gvid)
     dft.dot_path_ratio = {}
 
     dft_assign_dot_path_ratios(dft.dot_positions, dft.travel_dist, dft.start_pos)
-    dft_log(" Journey path: %d dots @ %dm, %.0fm along path (straight %.0fm)",
+    dft_log("Journey path: %d dots @ %dm, %.0fm along path (straight %.0fm)",
         dft.dot_count, dft_path.dot_spacing_m, dft.travel_dist, straight_dist)
     for i = 1, dft.dot_count do
         dft_ensure_path_dot(i, true)
@@ -161,11 +161,10 @@ function dft_start_travel_sequence(pos, lvid, gvid, is_transition, final_gvid)
     dft.arrival_forced_ambushes = 0
     dft.arrival_short_m = 0
     dft.target_stamina = 1.0
-    dft_dbg_clear()
-    dft_dbg(0, string.format("Trip start | %.0fm | sneak %d%%", dft.travel_dist, dft_calc_sneak_chance(dft.travel_mode == "sneaky")), "cyan")
+    dft_log("Trip start | %.0fm | sneak %d%%", dft.travel_dist, dft_calc_sneak_chance(dft.travel_mode == "sneaky"))
     dft.expected_duration = dft_game_minutes_for_dist(dft.travel_dist, dft.travel_mode == "sneaky", dft.encumbrance_time_mult)
     dft_plan_emission_interrupt()
-    dft_log(" Journey duration: %d game minutes (dist %.1f, mode %s, encumbrance %s speed x%.2f time x%.2f)",
+    dft_log("Journey duration: %d game minutes (dist %.1f, mode %s, encumbrance %s speed x%.2f time x%.2f)",
         dft.expected_duration, dft.travel_dist, dft.travel_mode,
         dft_get_inventory_weight_band(), dft.encumbrance_speed_mult, dft.encumbrance_time_mult)
 
@@ -185,7 +184,7 @@ function dft_start_travel_sequence(pos, lvid, gvid, is_transition, final_gvid)
     -- dft_trigger_emission_interrupt), so a plain cancel (PDA closed, damage taken) never
     -- costs any cooldown at all.
 
-    dft_log(" Journey started (%s, %.0fm, ~%s).",
+    dft_log("Journey started (%s, %.0fm, ~%s).",
         dft.is_transition and "zone exit" or dft.travel_mode,
         dft.travel_dist,
         dft_format_duration(dft.expected_duration or 1))
@@ -252,11 +251,11 @@ dft_plan_emission_interrupt = function()
     if journey_secs <= 0 then return end
 
     if secs_until <= 0 then
-        dft_log(" Emission due now - travel blocked at start.")
+        dft_log("Emission due now - travel blocked at start.")
         return
     end
     if secs_until > journey_secs then
-        dft_log(" Emission after trip (%.0fs until surge, journey %.0fs) - no interrupt planned.", secs_until, journey_secs)
+        dft_log("Emission after trip (%.0fs until surge, journey %.0fs) - no interrupt planned.", secs_until, journey_secs)
         return
     end
 
@@ -267,7 +266,7 @@ dft_plan_emission_interrupt = function()
 
     dft.emission_interrupt_ratio = ratio
     dft.emission_time_jump_secs = jump_secs
-    dft_log(" Emission planned at %.1f%% of route (%.0fs until surge, jump %.0fs, lead %ds).",
+    dft_log("Emission planned at %.1f%% of route (%.0fs until surge, jump %.0fs, lead %ds).",
         ratio * 100, secs_until, jump_secs, lead)
 end
 
@@ -292,7 +291,7 @@ end
 
 dft_cancel_journey_emission = function()
     if not dft.is_traveling then return end
-    dft_log(" Journey cancelled - emission started before planned interrupt point.")
+    dft_log("Journey cancelled - emission started before planned interrupt point.")
     dft_close_pda_for_travel()
     dft_cleanup_dots()
     dft_stop_travel_logic()
@@ -321,7 +320,7 @@ function dft_advance_travel_time_seconds(sec, opts)
         dft_check_and_skip_surges()
     end
     level.change_game_time(days, hrs, mins)
-    dft_log(" advance_travel_time_seconds: +%ds -> %dd %dh %dm (allow_surge=%s)",
+    dft_log("advance_travel_time_seconds: +%ds -> %dd %dh %dm (allow_surge=%s)",
         total_sec, days, hrs, mins, tostring(opts.allow_surge == true))
 end
 
@@ -592,7 +591,7 @@ function dft_actor_on_update()
     dft.next_update    = tg + 100
 
     if (not dft.pda_check_from or tg >= dft.pda_check_from) and not dft_is_pda_map_shown() then
-        dft_log(" Journey cancelled - PDA closed.")
+        dft_log("Journey cancelled - PDA closed.")
         dft_abort_journey()
         return
     end
@@ -667,7 +666,7 @@ end
 dft_complete_travel_sequence = function()
     if db.actor then
         -- surge_immuned removed: it causes GAMMA to loop surges via start(true)
-        dft_log(" Surge immunity set on complete_travel_sequence.")
+        dft_log("Surge immunity set on complete_travel_sequence.")
     end
     -- Full arrival - the player is about to be teleported having covered the whole route, so
     -- the sneak cooldown (if this was a sneaky journey) starts now at its full duration. Grab
@@ -699,7 +698,7 @@ dft_complete_travel_sequence = function()
     local final_pos, final_lvid
     if dft.is_transition then
         final_pos, final_lvid = dft_find_ground_pos(dft.dest_raw_pos or dft.dest_pos, dft.dest_lvid, dft.dest_gvid)
-        dft_log(" Transition Teleport: pos=(%f, %f, %f)", final_pos.x, final_pos.y, final_pos.z)
+        dft_log("Transition Teleport: pos=(%f, %f, %f)", final_pos.x, final_pos.y, final_pos.z)
     else
         local forced_arrival = 0
         final_pos, forced_arrival = dft_resolve_arrival_position()
@@ -713,14 +712,14 @@ dft_complete_travel_sequence = function()
             end
             dft.arrival_short_m = math.floor(dft_horizontal_dist(final_pos, dft.dest_pos) or final_pos:distance_to(dft.dest_pos))
             local pre_nearest = arrival_targets and dft_nearest_hostile_dist_m(final_pos, arrival_targets)
-            dft_log(" Arrival pre-teleport: short_of_dest=%dm nearest_hostile=%sm pos=(%.1f,%.1f,%.1f)",
+            dft_log("Arrival pre-teleport: short_of_dest=%dm nearest_hostile=%sm pos=(%.1f,%.1f,%.1f)",
                 dft.arrival_short_m, pre_nearest and tostring(pre_nearest) or "?",
                 final_pos.x, final_pos.y, final_pos.z)
         else
             dft.arrival_short_m = 0
         end
         if forced_arrival > 0 then
-            dft_log(" Arrival resolved after %d forced offset(s) - stopped %dm short.",
+            dft_log("Arrival resolved after %d forced offset(s) - stopped %dm short.",
                 forced_arrival, dft.arrival_short_m)
         end
     end
@@ -749,7 +748,7 @@ dft_complete_travel_sequence = function()
     end
     if was_arrival_ambush and arrival_targets and final_pos then
         local post_nearest = dft_nearest_hostile_dist_m(final_pos, arrival_targets)
-        dft_log(" Arrival post-snap: short_of_dest=%dm nearest_hostile=%sm pos=(%.1f,%.1f,%.1f)",
+        dft_log("Arrival post-snap: short_of_dest=%dm nearest_hostile=%sm pos=(%.1f,%.1f,%.1f)",
             dft.arrival_short_m or 0, post_nearest and tostring(post_nearest) or "?",
             final_pos.x, final_pos.y, final_pos.z)
     end
@@ -759,14 +758,14 @@ dft_complete_travel_sequence = function()
             CreateTimeEvent("dft", "ambush_alert", 0.5, function()
                 if db.actor and arrival_targets then
                     dft_alert_ambushers(arrival_targets)
-                    dft_log(" Arrival ambush: hostiles alerted.")
+                    dft_log("Arrival ambush: hostiles alerted.")
                 end
                 return true
             end)
             dft.arrival_ambush_targets = nil
         end
         if final_pos then
-            dft_log(" Actor teleported to (%f, %f, %f)", final_pos.x, final_pos.y, final_pos.z)
+            dft_log("Actor teleported to (%f, %f, %f)", final_pos.x, final_pos.y, final_pos.z)
         end
 
         dft_advance_travel_time(1.0)
@@ -777,7 +776,7 @@ dft_complete_travel_sequence = function()
             dft_set_safety_active(60.0)
 
             if dft.is_transition then
-                dft_log(" Zone exit reached - loading next level.")
+                dft_log("Zone exit reached - loading next level.")
                 dft_clear()
             else
                 if was_arrival_ambush then
@@ -799,9 +798,9 @@ dft_complete_travel_sequence = function()
                     dft_msg(dft_journey_result_message(arrive_opts), dft_journey_result_style(arrive_opts))
                 end
 
-                dft_dbg(0, string.format("Arrived %.0fm | %s", dft.travel_dist, dft_format_duration(dft.expected_duration or 1)), "cyan")
-                dft_dbg(1, string.format("Avoided %d encounter(s)", dft.encounters_avoided or 0), "green")
-                dft_dbg(2, string.format("Sneak %d%% | Sneaking Lv%d", dft_calc_sneak_chance(dft.travel_mode == "sneaky"), dft_get_sneaking_level()), nil)
+                dft_log("Arrived %.0fm | %s | avoided %d encounter(s) | sneak %d%% (Lv%d)",
+                    dft.travel_dist, dft_format_duration(dft.expected_duration or 1), dft.encounters_avoided or 0,
+                    dft_calc_sneak_chance(dft.travel_mode == "sneaky"), dft_get_sneaking_level())
 
                 dft_clear()
             end
@@ -811,7 +810,7 @@ dft_complete_travel_sequence = function()
                     pcall(function() save_var(db.actor, "surge_immuned", false) end)
                 end
                 dft.safety_until = 0
-                dft_log(" Surge immunity and safety cleared after arrival stabilization.")
+                dft_log("Surge immunity and safety cleared after arrival stabilization.")
                 return true
             end)
 
@@ -835,7 +834,7 @@ function dft_process_refund(ratio)
     local refund = math.floor(dft.journey_cost * remaining)
     if refund > 0 then
         db.actor:give_money(refund)
-        dft_log(" Refunded %d RU from aborted journey.", refund)
+        dft_log("Refunded %d RU from aborted journey.", refund)
     end
     return refund
 end
@@ -856,8 +855,8 @@ dft_detect_ambush = function(virtual_pos)
     local sneaky = dft.travel_mode == "sneaky"
     local ambush_radius = dft_ambush_radius_m(sneaky)
     local weather_cut = dft_get_weather_visibility_reduction_m()
-    dft_dbg(2, string.format("Ambush scan radius %.0fm (hr %.1f, weather -%.0fm, mode %s)",
-        ambush_radius, dft_get_time_hours(), weather_cut, sneaky and "sneak" or "travel"), nil)
+    dft_log("Ambush scan radius %.0fm (hr %.1f, weather -%.0fm, mode %s)",
+        ambush_radius, dft_get_time_hours(), weather_cut, sneaky and "sneak" or "travel")
     local targets = dft_collect_hostiles_at(virtual_pos, ambush_radius, actor_lid)
     if #targets.squads == 0 and #targets.npcs == 0 then
         return false
@@ -865,7 +864,7 @@ dft_detect_ambush = function(virtual_pos)
 
     dft_log_ambush_scan("journey-scan", virtual_pos, ambush_radius, targets)
     local nearest = dft_nearest_hostile_dist_m(virtual_pos, targets)
-    dft_log(" Ambush journey: nearest hostile at %sm along route.", nearest and tostring(nearest) or "?")
+    dft_log("Ambush journey: nearest hostile at %sm along route.", nearest and tostring(nearest) or "?")
 
     dft.stats_ambushes = (dft.stats_ambushes or 0) + 1
 
@@ -879,13 +878,12 @@ dft_detect_ambush = function(virtual_pos)
     local roll = math.random(1, 100)
     if roll <= total_chance then
         dft_log("STEALTH SUCCESS: Dodged encounter! Roll: %d <= Chance: %d", roll, total_chance)
-        dft_dbg_sneak_summary(true, roll, total_chance, true)
 
         pcall(function()
             xr_sound.set_sound_play(db.actor:id(), "pda_tips")
         end)
 
-        dft_log(" Stealth dodge: slipped past threat (%d%% chance).", total_chance)
+        dft_log("Stealth dodge: slipped past threat (%d%% chance).", total_chance)
 
         dft.encounters_avoided = (dft.encounters_avoided or 0) + 1
         dft.stats_ambushes = math.max((dft.stats_ambushes or 0) - 1, 0)
@@ -895,7 +893,6 @@ dft_detect_ambush = function(virtual_pos)
     end
 
     dft_log("STEALTH FAILURE: Failed to dodge encounter. Roll: %d > Chance: %d", roll, total_chance)
-    dft_dbg_sneak_summary(true, roll, total_chance, false)
     dft.ambush_targets = targets
     return true
 end
@@ -1027,7 +1024,7 @@ dft_trigger_encounter = function()
             CreateTimeEvent("dft", "encounter_cleanup", 0.5, function()
                 dft.safety_until = 0
                 pcall(function() save_var(db.actor, "surge_immuned", false) end)
-                dft_log(" Safety and surge immunity cleared (encounter).")
+                dft_log("Safety and surge immunity cleared (encounter).")
                 return true
             end)
             return true

@@ -24,7 +24,6 @@ local MCM_SECTION_MAIN = "main"
 local MCM_SECTION_DEV = "development"
 
 local MCM_DEV_KEYS = {
-    debug_overlay       = true,
     debug_log           = true,
     path_preview        = true,
     sneaking_level_up   = true,
@@ -41,7 +40,6 @@ end
 
 local get_config_defaults = {
     message_duration = 30,
-    debug_overlay    = false,
     debug_log        = false,
     path_preview     = false,
 }
@@ -55,7 +53,6 @@ get_config = function(key)
 end
 
 local function load_config()
-    dft_config.debug_overlay = get_config("debug_overlay") == true
     dft_config.debug_log = get_config("debug_log") == true
     local pp = get_config("path_preview")
     dft_config.path_preview = (pp == true or pp == 1)
@@ -64,12 +61,6 @@ local function load_config()
         and dft_dorn.mcm.key(MOD_ID, MCM_SECTION_DEV .. "/sneaking_level_up", nil)
     dft_config.sneaking_level_down = dft_dorn and dft_dorn.mcm
         and dft_dorn.mcm.key(MOD_ID, MCM_SECTION_DEV .. "/sneaking_level_down", nil)
-    if dft_dorn and dft_dorn.dbg then
-        dft_dorn.dbg.set_enabled(MOD_ID, dft_config.debug_overlay)
-        if not dft_config.debug_overlay and _G.dft_dbg_clear then
-            _G.dft_dbg_clear()
-        end
-    end
     if _G.refresh_active_config then
         _G.refresh_active_config()
     elseif refresh_active_config then
@@ -107,7 +98,7 @@ actor_on_before_hit = function(shit, bone_id)
             return
         end
         if (shit.power or 0) > 0 then
-            dft_log(" Journey interrupted by incoming damage (type=%s power=%.2f).",
+            dft_log("Journey interrupted by incoming damage (type=%s power=%.2f).",
                 tostring(shit.type), shit.power or 0)
             dft_abort_journey("damage")
         end
@@ -115,7 +106,7 @@ actor_on_before_hit = function(shit, bone_id)
     end
 
     if dft_is_safety_active() then
-        dft_log(" Damage blocked by travel safety. Original power: %f, type: %d", shit.power, shit.type)
+        dft_log("Damage blocked by travel safety. Original power: %f, type: %d", shit.power, shit.type)
         shit.power = 0
     end
 end
@@ -137,7 +128,7 @@ function dft_abort_journey(reason)
     end
     local refund = dft_process_refund(ratio)
 
-    dft_log(" Journey cancelled (%.0f%% complete, reason=%s) - actor stays in place.", ratio * 100, tostring(reason or "manual"))
+    dft_log("Journey cancelled (%.0f%% complete, reason=%s) - actor stays in place.", ratio * 100, tostring(reason or "manual"))
     dft_cleanup_dots()
     dft_stop_travel_logic()
     dft_clear()
@@ -171,7 +162,7 @@ function on_game_start()
         dft.right_click_avail = (_G.COnRightClickMap ~= nil)
         if dft.right_click_avail then
             RegisterScriptCallback("on_map_right_click", dft_on_map_right_click)
-            dft_log(" on_map_right_click registered (modded PDA map clicks).")
+            dft_log("on_map_right_click registered (modded PDA map clicks).")
         end
         RegisterScriptCallback("actor_on_update",                dft_actor_on_update)
         RegisterScriptCallback("actor_on_first_update",          actor_on_first_update)
@@ -186,7 +177,7 @@ function on_game_start()
         RegisterScriptCallback("load_state",                 dft_on_load_state)
         RegisterScriptCallback("save_state",                 dft_persist_dots)
         RegisterScriptCallback("load_state",                 dft_restore_dots)
-        dft_log(" Callbacks registered.")
+        dft_log("Callbacks registered.")
         dft_log("session start | debug_log=%s", tostring(dft_config.debug_log))
 
         -- Initial config load
@@ -194,7 +185,7 @@ function on_game_start()
 
         -- BHS travel/sleep safety integration (pure monkey-patch to prevent BHS limb damage on travel/sleep)
         if zzz_player_injuries and zzz_player_injuries.actor_on_update then
-            dft_log(" Hooking BHS zzz_player_injuries.actor_on_update for travel safety...")
+            dft_log("Hooking BHS zzz_player_injuries.actor_on_update for travel safety...")
             local original_bhs_update = zzz_player_injuries.actor_on_update
             local bhs_idx = nil
             local last_game_time = nil
@@ -246,7 +237,7 @@ on_loading_screen_dismissed = function()
 end
 
 actor_on_first_update = function()
-    dft_log(" actor_on_first_update triggered.")
+    dft_log("actor_on_first_update triggered.")
     dft_unregister_fft_map_handlers()
 
     -- Drop any cached PDA-attached sneak-cooldown label - the live PDA dialog object can be
@@ -293,7 +284,7 @@ actor_on_first_update = function()
         end
 
         if purged > 0 then
-            dft_log(" Auto orphan sweep: removed %d stuck dot(s)", purged)
+            dft_log("Auto orphan sweep: removed %d stuck dot(s)", purged)
         end
         return true
     end)
@@ -306,7 +297,7 @@ actor_on_first_update = function()
         dft_set_safety_active(60.0)
         if db.actor then
             -- surge_immuned removed: it causes GAMMA to loop surges via start(true)
-            dft_log(" Surge immunity pre-activated on first update for transition.")
+            dft_log("Surge immunity pre-activated on first update for transition.")
         end
     end
 
@@ -317,7 +308,7 @@ actor_on_first_update = function()
             return false
         end
         if time_global() - resume_start_tg > 60000 then
-            dft_log(" Resume timed out after 60 seconds - clearing stale journey state")
+            dft_log("Resume timed out after 60 seconds - clearing stale journey state")
             dft_clear()
             return true
         end
@@ -326,7 +317,7 @@ actor_on_first_update = function()
 
         local pos, lvid, gvid, final_gvid, f_pos, f_lvid, ratio = dft_load()
         if not pos or not final_gvid then
-            dft_log(" No pending journey found on load.")
+            dft_log("No pending journey found on load.")
             return true
         end
 
@@ -343,7 +334,7 @@ actor_on_first_update = function()
         -- ambush, emission interrupt) - a cancel is a cancel, so no time is skipped here either,
         -- same as closing the PDA or taking damage cancels the trip with no time jump.
         ratio = math.max(0, math.min(ratio or 0, 1.0))
-        dft_log(" Journey was mid-flight at save time (%.0f%% complete) - ending it, not resuming.", ratio * 100)
+        dft_log("Journey was mid-flight at save time (%.0f%% complete) - ending it, not resuming.", ratio * 100)
 
         dft_set_safety_active(60.0)
 

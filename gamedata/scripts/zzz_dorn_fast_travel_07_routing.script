@@ -115,7 +115,7 @@ function dft_advance_travel_time(ratio, opts)
             wipe_dangerous_stats()
         end
         local secs = diff_sec % 60
-        dft_log(" advance_travel_time: jumped %dd %dh %dm %ds (ratio %.2f allow_surge=%s)",
+        dft_log("advance_travel_time: jumped %dd %dh %dm %ds (ratio %.2f allow_surge=%s)",
             days, hrs, mins, secs, ratio, tostring(allow_surge))
         if not allow_surge then
             for i = 1, 20 do
