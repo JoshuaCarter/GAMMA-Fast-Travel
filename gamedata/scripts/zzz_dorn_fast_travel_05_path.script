@@ -2026,6 +2026,8 @@ do
     _G.dft_purge_stuck_dot_pdas = dft_purge_stuck_dot_pdas
     _G.dft_ensure_path_dot = dft_ensure_path_dot
     _G.dft_promote_path_dot = dft_promote_path_dot
+    _G.dft_nearest_dot_index_for_ratio = dft_nearest_dot_index_for_ratio
+    _G.dft_mark_dot_outcome = dft_mark_dot_outcome
     _G.dft_path_preview_enabled = dft_path_preview_enabled
     _G.dft_preview_eligible = dft_preview_eligible
     _G.dft_ensure_level_graph_cache = dft_ensure_level_graph_cache

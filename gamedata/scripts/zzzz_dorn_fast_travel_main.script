@@ -631,3 +631,28 @@ function on_key_press(key)
     dft.player_ready = true
     if _G.dft_handle_dev_keys then _G.dft_handle_dev_keys(key) end
 end
+
+-- dft_publish_to_global - every other zzz_dorn_fast_travel_0X script explicitly re-exports its
+-- functions this way because a bare top-level "function foo()" is NOT automatically visible from
+-- another script file here; this file previously published nothing, which let dft_abort_journey
+-- silently sit unreachable from zzz_dorn_fast_travel_08_travel.script (crash: "attempt to call
+-- global 'dft_abort_journey' (a nil value)" the moment the PDA was closed mid-journey).
+do
+    _G.mcm_option_path = mcm_option_path
+    _G.get_config = get_config
+    _G.actor_on_before_hit = actor_on_before_hit
+    _G.on_option_change = on_option_change
+    _G.dft_abort_journey = dft_abort_journey
+    _G.on_game_start = on_game_start
+    _G.on_loading_screen_dismissed = on_loading_screen_dismissed
+    _G.actor_on_first_update = actor_on_first_update
+    _G.dft_menu_item_is_ours = dft_menu_item_is_ours
+    _G.dft_strip_own_menu_items = dft_strip_own_menu_items
+    _G.dft_add_cannot_travel_item = dft_add_cannot_travel_item
+    _G.dft_add_guide_menu_item = dft_add_guide_menu_item
+    _G.dft_add_travel_menu_items = dft_add_travel_menu_items
+    _G.dft_on_map_right_click = dft_on_map_right_click
+    _G.on_map_spot_menu_add_property = on_map_spot_menu_add_property
+    _G.on_map_spot_menu_property_clicked = on_map_spot_menu_property_clicked
+    _G.on_key_press = on_key_press
+end
