@@ -7,6 +7,19 @@ _G.dft_config = _G.dft_config or {}
 local dft_config = _G.dft_config
 local dft = _G.dft
 
+-- Forward declarations for this file's private (non-exported) helpers, so they can
+-- reference each other regardless of definition order below. refresh_active_config and
+-- dft_abort_journey are the only two functions here any other DFT script calls, so they
+-- alone stay bare globals (see the publish block at the end of this file). on_game_start
+-- is NOT in this list - X-Ray calls it directly per-file at boot (see
+-- dorn_common_7367f5e7.script's header comment), so it must stay a real bare top-level
+-- function, never a local, even though no other DFT script calls it by name.
+local mcm_option_path, get_config, actor_on_before_hit, on_option_change,
+    on_loading_screen_dismissed, actor_on_first_update, dft_menu_item_is_ours,
+    dft_strip_own_menu_items, dft_add_cannot_travel_item, dft_add_guide_menu_item,
+    dft_add_travel_menu_items, dft_on_map_right_click, on_map_spot_menu_add_property_impl,
+    on_map_spot_menu_add_property, on_map_spot_menu_property_clicked, on_key_press
+
 local MCM_SECTION_MAIN = "main"
 local MCM_SECTION_DEV = "development"
 
@@ -21,12 +34,12 @@ local MCM_DEV_KEYS = {
 -- ============================================================
 -- 2. Configuration
 -- ============================================================
-function mcm_option_path(key)
+mcm_option_path = function(key)
     local section = MCM_DEV_KEYS[key] and MCM_SECTION_DEV or MCM_SECTION_MAIN
     return section .. "/" .. key
 end
 
-function get_config(key)
+get_config = function(key)
     local dft_dorn = _G.dft and _G.dft.dorn
 
     if dft_dorn and dft_dorn.mcm then
@@ -92,7 +105,7 @@ end
 
 -- Any damage that would actually lower health during travel ends the journey - no need to
 -- guess at which hit types "count", the player can see what happened and figure out why.
-function actor_on_before_hit(shit, bone_id)
+actor_on_before_hit = function(shit, bone_id)
     if dft.is_traveling then
         -- The ambush outcome is already locked in once the dot/sound reveal fires (the brief
         -- delay before dft_trigger_encounter actually teleports) - don't let a stray hit in
@@ -115,7 +128,7 @@ function actor_on_before_hit(shit, bone_id)
     end
 end
 
-function on_option_change()
+on_option_change = function()
     dft_log("Options changed, refreshing config...")
     load_config()
 end
@@ -236,14 +249,11 @@ function on_game_start()
     end
 end
 
-_G.refresh_active_config = refresh_active_config
-_G.get_config = get_config
-
-function on_loading_screen_dismissed()
+on_loading_screen_dismissed = function()
     dft.player_ready = true
 end
 
-function actor_on_first_update()
+actor_on_first_update = function()
     dft_log(" actor_on_first_update triggered.")
     dft_unregister_fft_map_handlers()
 
@@ -353,7 +363,7 @@ function actor_on_first_update()
         return true
     end)
 end
-function dft_menu_item_is_ours(text)
+dft_menu_item_is_ours = function(text)
     if not text or text == "" then return false end
     local markers = {
         dft_str("dft_menu_travel_here"),
@@ -369,7 +379,7 @@ function dft_menu_item_is_ours(text)
     return false
 end
 
-function dft_strip_own_menu_items(pui)
+dft_strip_own_menu_items = function(pui)
     pcall(function()
         if not (pui and pui.GetItemsCount and pui.GetItemByIndex and pui.RemoveItem) then return end
         local count = pui:GetItemsCount()
@@ -393,14 +403,14 @@ local function dft_lc_skip_silent_error(reason)
     return reason == "lc_wrong_level" or reason == "invalid_id" or reason == "no_object"
 end
 
-function dft_add_cannot_travel_item(pui, id, reason)
+dft_add_cannot_travel_item = function(pui, id, reason)
     pui:AddItem(dft_str("dft_msg_cannot_travel_here"))
     dft_log("menu: cannot travel id=%s reason=%s", tostring(id), tostring(reason or "unknown"))
     dft_clear_path_preview()
     return true
 end
 
-function dft_add_guide_menu_item(pui, id, se_obj)
+dft_add_guide_menu_item = function(pui, id, se_obj)
     local dist, from_lid, to_lid = dft_guide_distance(nil, se_obj, id)
     local guide_text = dft_str("dft_menu_hire_guide")
     local guide_cost = dft_calc_guide_cost(dist, from_lid, to_lid)
@@ -410,7 +420,7 @@ function dft_add_guide_menu_item(pui, id, se_obj)
     dft_log("menu: guide id=%s cost=%d dist=%.0f dur=%s", tostring(id), guide_cost, dist, dur_str)
 end
 
-function dft_add_travel_menu_items(pui, id, is_lc, include_sneak)
+dft_add_travel_menu_items = function(pui, id, is_lc, include_sneak)
     if dft_actor_too_encumbered_to_move() then
         pui:AddItem(dft_str("dft_msg_too_encumbered"))
         dft_clear_path_preview()
@@ -437,7 +447,7 @@ function dft_add_travel_menu_items(pui, id, is_lc, include_sneak)
 end
 
 
-function dft_on_map_right_click(property_ui, map_table)
+dft_on_map_right_click = function(property_ui, map_table)
     if dft.right_click_avail then
         dft.menu_open_seq = (dft.menu_open_seq or 0) + 1
         dft.menu_resolve_cache = nil
@@ -575,7 +585,7 @@ on_map_spot_menu_add_property_impl = function(pui, id, ln, hint)
     return false
 end
 
-function on_map_spot_menu_add_property(pui, id, ln, hint)
+on_map_spot_menu_add_property = function(pui, id, ln, hint)
     local ok, err = xpcall(function()
         on_map_spot_menu_add_property_impl(pui, id, ln, hint)
     end, debug.traceback)
@@ -584,7 +594,7 @@ function on_map_spot_menu_add_property(pui, id, ln, hint)
     end
 end
 
-function on_map_spot_menu_property_clicked(pui, id, ln, t)
+on_map_spot_menu_property_clicked = function(pui, id, ln, t)
     local ok, err = xpcall(function()
         local result = t or (pui and pui.GetResult and pui:GetResult())
         dft_log("menu click: id=%s ln=%s result=%s", tostring(id), tostring(ln), tostring(result))
@@ -627,32 +637,19 @@ function on_map_spot_menu_property_clicked(pui, id, ln, t)
 end
 
 
-function on_key_press(key)
+on_key_press = function(key)
     dft.player_ready = true
     if _G.dft_handle_dev_keys then _G.dft_handle_dev_keys(key) end
 end
 
 -- dft_publish_to_global - every other zzz_dorn_fast_travel_0X script explicitly re-exports its
 -- functions this way because a bare top-level "function foo()" is NOT automatically visible from
--- another script file here; this file previously published nothing, which let dft_abort_journey
--- silently sit unreachable from zzz_dorn_fast_travel_08_travel.script (crash: "attempt to call
--- global 'dft_abort_journey' (a nil value)" the moment the PDA was closed mid-journey).
+-- another script file here. These two are the only functions in this file any other DFT script
+-- calls (dft_abort_journey from zzz_dorn_fast_travel_08_travel.script to cancel a journey when
+-- the PDA closes; refresh_active_config from zzz_dorn_fast_travel_01_core.script/08_travel.script
+-- to read the message-duration MCM setting) - everything else here (menu building, event
+-- callbacks) is only ever used within this same file, so it stays a private local function.
 do
-    _G.mcm_option_path = mcm_option_path
-    _G.get_config = get_config
-    _G.actor_on_before_hit = actor_on_before_hit
-    _G.on_option_change = on_option_change
     _G.dft_abort_journey = dft_abort_journey
-    _G.on_game_start = on_game_start
-    _G.on_loading_screen_dismissed = on_loading_screen_dismissed
-    _G.actor_on_first_update = actor_on_first_update
-    _G.dft_menu_item_is_ours = dft_menu_item_is_ours
-    _G.dft_strip_own_menu_items = dft_strip_own_menu_items
-    _G.dft_add_cannot_travel_item = dft_add_cannot_travel_item
-    _G.dft_add_guide_menu_item = dft_add_guide_menu_item
-    _G.dft_add_travel_menu_items = dft_add_travel_menu_items
-    _G.dft_on_map_right_click = dft_on_map_right_click
-    _G.on_map_spot_menu_add_property = on_map_spot_menu_add_property
-    _G.on_map_spot_menu_property_clicked = on_map_spot_menu_property_clicked
-    _G.on_key_press = on_key_press
+    _G.refresh_active_config = refresh_active_config
 end

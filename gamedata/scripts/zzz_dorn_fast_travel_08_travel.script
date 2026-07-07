@@ -6,12 +6,18 @@
 -- ============================================================
 -- Shared dft globals (Anomaly isolates zzz_* script environments)
 local dft = _G.dft
-local dft_config = _G.dft_config
+-- Forward declarations for this file's private (non-exported) helpers, so they can
+-- reference each other regardless of definition order below.
+local dft_apply_final_stats, dft_cancel_journey_emission, dft_complete_travel_sequence,
+    dft_detect_ambush, dft_force_end_surge, dft_get_surge_manager, dft_is_emission_active,
+    dft_journey_path_ratio, dft_plan_emission_interrupt, dft_play_fade_teleport,
+    dft_seconds_until_surge, dft_should_emission_interrupt, dft_trigger_emission_interrupt,
+    dft_trigger_encounter
 local PP_FADE_ID = 22301
 local FADE_TELEPORT_DELAY_S = 0.5
 local TELEPORT_INVULN_S = 1.0
 
-function dft_play_fade_teleport(final_pos, lvid, gvid, on_done)
+dft_play_fade_teleport = function(final_pos, lvid, gvid, on_done)
     pcall(function()
         level.add_pp_effector("dorn_ft_fade.ppe", PP_FADE_ID, false)
         level.set_pp_effector_factor(PP_FADE_ID, 1.0)
@@ -190,7 +196,7 @@ end
 -- Emission / surge scheduling (GAMMA surge_manager)
 -- ============================================================
 
-function dft_get_surge_manager()
+dft_get_surge_manager = function()
     if surge_manager and surge_manager.get_surge_manager then
         local ok, sm = pcall(surge_manager.get_surge_manager)
         if ok then return sm end
@@ -206,7 +212,7 @@ function dft_get_psi_storm_manager()
     return nil
 end
 
-function dft_seconds_until_surge(sm)
+dft_seconds_until_surge = function(sm)
     sm = sm or dft_get_surge_manager()
     if not (sm and sm._delta and sm.last_surge_time) then return nil end
     local ok, elapsed = pcall(function() return game.get_game_time():diffSec(sm.last_surge_time) end)
@@ -214,7 +220,7 @@ function dft_seconds_until_surge(sm)
     return sm._delta - elapsed
 end
 
-function dft_is_emission_active()
+dft_is_emission_active = function()
     if surge_manager and surge_manager.is_started then
         local ok, active = pcall(surge_manager.is_started)
         if ok and active then return true end
@@ -234,7 +240,7 @@ function dft_emission_blocks_travel_start()
 end
 
 -- Precompute path % and time jump for a scheduled emission during this trip.
-function dft_plan_emission_interrupt()
+dft_plan_emission_interrupt = function()
     dft.emission_interrupt_ratio = nil
     dft.emission_time_jump_secs = nil
     dft.emission_interrupt_pending = false
@@ -265,7 +271,7 @@ function dft_plan_emission_interrupt()
         ratio * 100, secs_until, jump_secs, lead)
 end
 
-function dft_journey_path_ratio()
+dft_journey_path_ratio = function()
     if not (dft.travel_dist and dft.travel_dist > 0) then return 0 end
     return math.min((dft.current_dist or 0) / dft.travel_dist, 1.0)
 end
@@ -278,13 +284,13 @@ function dft_emission_started_unexpectedly()
     return dft_journey_path_ratio() + 0.001 < planned
 end
 
-function dft_should_emission_interrupt()
+dft_should_emission_interrupt = function()
     if not dft.emission_interrupt_ratio then return false end
     if dft.emission_interrupt_pending then return false end
     return dft_journey_path_ratio() >= dft.emission_interrupt_ratio
 end
 
-function dft_cancel_journey_emission()
+dft_cancel_journey_emission = function()
     if not dft.is_traveling then return end
     dft_log(" Journey cancelled - emission started before planned interrupt point.")
     dft_close_pda_for_travel()
@@ -346,7 +352,7 @@ function dft_close_pda_for_travel()
     end)
 end
 
-function dft_trigger_emission_interrupt()
+dft_trigger_emission_interrupt = function()
     local ratio = dft.emission_interrupt_ratio or dft_journey_path_ratio()
     ratio = math.max(0, math.min(ratio, 1.0))
     dft.emission_interrupt_pending = true
@@ -403,7 +409,7 @@ end
 -- ULTRA AGGRESSIVE SURGE PROTECTION (GAMMA)
 -- ============================================================
 
-function dft_force_end_surge(manager)
+dft_force_end_surge = function(manager)
     if not manager then return end
     -- If a surge is actively running, use GAMMA's skip_surge() to cleanly end it.
     -- skip_surge() is safe (unlike end_surge which calls kill_all_unhided).
@@ -424,29 +430,6 @@ function dft_force_end_surge(manager)
     pcall(function() manager.time_forwarded = false end)
     pcall(function() manager.last_surge_time = game.get_game_time() end)
     pcall(function() manager._delta = 6 * 3600 end)  -- 6 hours until next surge
-end
-
--- Call this AFTER level.change_game_time() to prevent post-jump surges
-function dft_prevent_post_jump_surges()
-    if surge_manager and surge_manager.get_surge_manager then
-        local sm = surge_manager.get_surge_manager()
-        if sm then
-            pcall(function() sm.started = false end)
-            pcall(function() sm.finished = true end)
-            pcall(function() sm.last_surge_time = game.get_game_time() end)
-            pcall(function() sm._delta = 6 * 3600 end)
-        end
-    end
-    if psi_storm_manager and psi_storm_manager.get_psi_storm_manager then
-        local pm = psi_storm_manager.get_psi_storm_manager()
-        if pm then
-            pcall(function() pm.started = false end)
-            pcall(function() pm.finished = true end)
-            pcall(function() pm.last_surge_time = game.get_game_time() end)
-            pcall(function() pm.last_psi_storm_time = game.get_game_time() end)
-            pcall(function() pm._delta = 6 * 3600 end)
-        end
-    end
 end
 
 function dft_check_and_skip_surges()
@@ -675,7 +658,7 @@ function dft_actor_on_update()
     end
 end
 
-function dft_complete_travel_sequence()
+dft_complete_travel_sequence = function()
     if db.actor then
         -- surge_immuned removed: it causes GAMMA to loop surges via start(true)
         dft_log(" Surge immunity set on complete_travel_sequence.")
@@ -859,7 +842,7 @@ function dft_play_ambush_alert()
     end)
 end
 
-function dft_detect_ambush(virtual_pos)
+dft_detect_ambush = function(virtual_pos)
     if not (virtual_pos and db.actor) then return false end
 
     local gg = game_graph()
@@ -910,7 +893,7 @@ function dft_detect_ambush(virtual_pos)
     dft.ambush_targets = targets
     return true
 end
-function dft_apply_final_stats(time_ratio)
+dft_apply_final_stats = function(time_ratio)
     if not db.actor then return end
     time_ratio = time_ratio or 1.0
     time_ratio = math.max(0, math.min(time_ratio, 1.0))
@@ -951,12 +934,7 @@ function dft_cleanup_dots()
     dft.dot_path_ratio = {}
 end
 
-function dft_purge_orphan_dots()
-    local purged = dft_purge_stuck_dot_pdas(true)
-    dft_log(" purge_orphan_dots: %d removed", purged)
-end
-
-function dft_trigger_encounter()
+dft_trigger_encounter = function()
     local ratio = math.min(dft.current_dist / dft.travel_dist, 1.0)
 
     -- Ambushed partway through a sneak journey - only charge cooldown for the fraction of the
@@ -1099,32 +1077,16 @@ end
 
 -- dft_publish_to_global
 do
-    _G.dft_get_surge_manager = dft_get_surge_manager
-    _G.dft_seconds_until_surge = dft_seconds_until_surge
-    _G.dft_is_emission_active = dft_is_emission_active
     _G.dft_emission_blocks_travel_start = dft_emission_blocks_travel_start
-    _G.dft_plan_emission_interrupt = dft_plan_emission_interrupt
-    _G.dft_should_emission_interrupt = dft_should_emission_interrupt
-    _G.dft_trigger_emission_interrupt = dft_trigger_emission_interrupt
-    _G.dft_cancel_journey_emission = dft_cancel_journey_emission
     _G.dft_advance_travel_time_seconds = dft_advance_travel_time_seconds
-    _G.dft_journey_path_ratio = dft_journey_path_ratio
     _G.dft_close_pda_for_travel = dft_close_pda_for_travel
-    _G.dft_play_fade_teleport = dft_play_fade_teleport
     _G.dft_start_travel_sequence = dft_start_travel_sequence
-    _G.dft_force_end_surge = dft_force_end_surge
-    _G.dft_prevent_post_jump_surges = dft_prevent_post_jump_surges
     _G.dft_check_and_skip_surges = dft_check_and_skip_surges
     _G.dft_set_safety_active = dft_set_safety_active
     _G.dft_is_safety_active = dft_is_safety_active
     _G.dft_actor_on_update = dft_actor_on_update
-    _G.dft_complete_travel_sequence = dft_complete_travel_sequence
     _G.dft_process_refund = dft_process_refund
-    _G.dft_detect_ambush = dft_detect_ambush
-    _G.dft_apply_final_stats = dft_apply_final_stats
     _G.dft_stop_travel_logic = dft_stop_travel_logic
     _G.dft_cleanup_dots = dft_cleanup_dots
-    _G.dft_purge_orphan_dots = dft_purge_orphan_dots
-    _G.dft_trigger_encounter = dft_trigger_encounter
     _G.dft_teleport_companions = dft_teleport_companions
 end

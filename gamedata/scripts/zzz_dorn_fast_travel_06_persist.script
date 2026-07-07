@@ -6,7 +6,6 @@
 -- ============================================================
 -- Shared dft globals (Anomaly isolates zzz_* script environments)
 local dft = _G.dft
-local dft_config = _G.dft_config
 function dft_save(pos, lvid, gvid, final_gvid)
     if not db.actor then return end
     save_var(db.actor, dft_save_vars.traveling,  true)

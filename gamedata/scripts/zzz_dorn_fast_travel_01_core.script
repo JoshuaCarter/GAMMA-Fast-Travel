@@ -3,6 +3,10 @@
 
 -- Shared dft globals (Anomaly isolates zzz_* script environments)
 local dft_config = _G.dft_config
+
+-- Forward declarations for this file's private (non-exported) helpers, so they can
+-- reference each other regardless of definition order below.
+local dft_format_msg, dft_load_level_danger, dft_msg_style_icon, dft_msg_style_prefix
 local dft_defaults = {
     is_traveling        = false,
     player_ready        = true,
@@ -112,7 +116,7 @@ _G.dft_guide_costs = nil -- lazy-loaded from guide_danger.ltx on first use, see 
 -- Travel's own [map_hazard_coefs] table since that's the best available reference for "how
 -- dangerous is this level", but kept as our own standalone ltx (easy to inspect/rebalance)
 -- rather than read from FFT at runtime, so this mod has zero dependency on FFT being installed.
-function dft_load_level_danger()
+dft_load_level_danger = function()
     local danger = {}
     local ini = ini_file("scripts\\dorn_fast_travel\\guide_danger.ltx")
     if ini and ini:section_exist("dft_guide_costs") then
@@ -277,33 +281,6 @@ _G.dft_save_vars = {
     sneak_cd   = "dft_scd", -- dft_time_elapsed() value at which the next sneak journey is allowed
 }
 
-_G.dft_static_zone_map = {
-    l01_escape          = {"l02_garbage", "k00_marsh", "k01_darkscape", "meadow"},
-    k00_marsh           = {"l01_escape", "l03_agroprom"},
-    l02_garbage         = {"l01_escape", "l03_agroprom", "l04_darkvalley", "l05_bar", "l06_rostok"},
-    l03_agroprom        = {"l02_garbage", "l08_yantar", "k00_marsh"},
-    l04_darkvalley      = {"l02_garbage", "k01_darkscape", "meadow", "k02_trucks_cemetery"},
-    k01_darkscape       = {"l01_escape", "l04_darkvalley"},
-    l05_bar             = {"l02_garbage", "l07_military", "l06_rostok"},
-    l06_rostok          = {"l02_garbage", "l05_bar", "l08_yantar"},
-    l07_military        = {"l05_bar", "l10_red_forest", "l10_radar", "l09_deadcity", "k02_trucks_cemetery"},
-    l08_yantar          = {"l03_agroprom", "l06_rostok", "l09_deadcity"},
-    l09_deadcity        = {"l08_yantar", "l07_military", "limansk"},
-    l10_red_forest      = {"l07_military", "jupiter", "limansk", "l10_radar"},
-    l10_radar           = {"l07_military", "l10_red_forest", "l11_pripyat"},
-    l11_pripyat         = {"l10_radar", "pripyat", "jupiter"},
-    pripyat             = {"l11_pripyat", "jupiter", "l12_stancia", "zaton"},
-    jupiter             = {"zaton", "l10_red_forest", "pripyat", "l11_pripyat"},
-    zaton               = {"jupiter", "pripyat"},
-    limansk             = {"l10_red_forest", "l11_hospital", "l09_deadcity"},
-    l11_hospital        = {"limansk", "l12_stancia_2"},
-    meadow              = {"l04_darkvalley", "l01_escape"},
-    k02_trucks_cemetery = {"l07_military", "l04_darkvalley"},
-    l12_stancia         = {"pripyat", "l12_stancia_2", "l13_generators"},
-    l12_stancia_2       = {"l12_stancia", "l13_generators", "l11_hospital"},
-    l13_generators      = {"l12_stancia", "l12_stancia_2"},
-}
-
 _G.dft_door_keywords = {
     l01_escape          = {"escape", "esc"},
     l02_garbage         = {"garbage", "gar"},
@@ -331,7 +308,7 @@ _G.dft_door_keywords = {
     l11_hospital        = {"hospital", "hos"},
 }
 
-function dft_format_msg(fmt, ...)
+dft_format_msg = function(fmt, ...)
     local arg = {...}
     if #arg == 0 then return tostring(fmt) end
     local ok, res = pcall(string.format, fmt, ...)
@@ -413,19 +390,6 @@ function dft_dbg_clear()
     end
 end
 
-function dft_safe_create_item(section, fallback)
-    if not db or not db.actor then return end
-    local ini = system_ini()
-    if section and ini:section_exist(section) then
-        alife_create_item(section, db.actor)
-    elseif fallback and ini:section_exist(fallback) then
-        dft_log("SAFE CREATE: Section %s missing, falling back to %s", tostring(section), tostring(fallback))
-        alife_create_item(fallback, db.actor)
-    else
-        dft_log("SAFE CREATE ERROR: Section %s and fallback missing!", tostring(section))
-    end
-end
-
 function dft_is_trader_restrictor(name)
     if not name then return false end
     local low_name = string.lower(name)
@@ -449,11 +413,11 @@ local dft_msg_style_icon_map = {
     warning = "ui_inGame2_radiation_middle",
 }
 
-function dft_msg_style_prefix(style)
+dft_msg_style_prefix = function(style)
     return (style and dft_msg_style_prefix_map[style]) or ""
 end
 
-function dft_msg_style_icon(style)
+dft_msg_style_icon = function(style)
     return (style and dft_msg_style_icon_map[style]) or nil
 end
 
@@ -478,7 +442,6 @@ end
 -- dft_publish_to_global
 do
     _G.dft_config = _G.dft_config or {}
-    _G.dft_format_msg = dft_format_msg
     _G.dft_log = dft_log
     _G.dft_path_road_log_enabled = dft_path_road_log_enabled
     _G.dft_path_road_log = dft_path_road_log
@@ -489,13 +452,9 @@ do
     _G.dft_is_cross_zone_destination = dft_is_cross_zone_destination
     _G.dft_dbg = dft_dbg
     _G.dft_dbg_clear = dft_dbg_clear
-    _G.dft_safe_create_item = dft_safe_create_item
     _G.dft_is_trader_restrictor = dft_is_trader_restrictor
     _G.dft_msg = dft_msg
-    _G.dft_msg_style_prefix = dft_msg_style_prefix
-    _G.dft_msg_style_icon = dft_msg_style_icon
     _G.dft_get_level_danger = dft_get_level_danger
-    _G.dft_load_level_danger = dft_load_level_danger
     _G.dft_set_fft_trip_in_progress = dft_set_fft_trip_in_progress
     _G.dft_time_elapsed = dft_time_elapsed
     printf("[DFT] core module loaded")

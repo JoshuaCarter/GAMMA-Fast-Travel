@@ -4,6 +4,14 @@
 -- Shared dft globals (Anomaly isolates zzz_* script environments)
 local dft = _G.dft
 local dft_config = _G.dft_config
+
+-- Forward declarations for this file's private (non-exported) helpers, so they can
+-- reference each other regardless of definition order below.
+local dft_ambush_time_reduction_m, dft_apply_sneaking_stat_delta, dft_dev_adjust_sneaking,
+    dft_format_distance, dft_get_actor_max_carry_weight, dft_get_encumbrance_time_mult,
+    dft_get_journey_specs, dft_get_sneaking_travel_speed_mult, dft_get_weather_name,
+    dft_is_night_hour, dft_is_raining, dft_is_twilight_hour, dft_mode_pda_speed_ratio,
+    dft_sneak_cooldown_minutes, dft_sneak_minutes_per_km, dft_time_band
 function dft_block_fft_travel(trip)
     if not trip then return end
     trip.ret_value = false
@@ -18,14 +26,7 @@ function dft_get_sneaking_level()
     return 0
 end
 
-function dft_get_sneaking_sneak_bonus()
-    if haru_skills and haru_skills.skills_stats and haru_skills.skills_stats.sneaking then
-        return haru_skills.skills_stats.sneaking.sneak_bonus or 0
-    end
-    return dft_get_sneaking_level() * 5
-end
-
-function dft_get_sneaking_travel_speed_mult()
+dft_get_sneaking_travel_speed_mult = function()
     local bonus_pct = 0
     if haru_skills and haru_skills.skills_stats and haru_skills.skills_stats.sneaking then
         bonus_pct = haru_skills.skills_stats.sneaking.travel_speed_bonus or 0
@@ -35,13 +36,9 @@ function dft_get_sneaking_travel_speed_mult()
     return 1.0 + (bonus_pct / 100.0)
 end
 
-function dft_get_sneaking_ambush_spawn_bonus()
-    return dft_get_sneaking_level() * dft_ambush.offset_per_sneak
-end
-
 -- Sneak travel cooldown: 1h base, reduced 3min per Sneaking level (20 max level * 3min = 60min,
 -- so it fully disappears at max level). Normal travel and guide travel have no cooldown.
-function dft_sneak_cooldown_minutes()
+dft_sneak_cooldown_minutes = function()
     local level = dft_get_sneaking_level() or 0
     return math.max(0, dft_sneak_cooldown_base_minutes - level * dft_sneak_cooldown_reduction_per_level)
 end
@@ -85,7 +82,7 @@ function dft_get_encounter_offset()
 end
 
 -- Max carry weight using the same rules as the inventory weight display (ui_inventory).
-function dft_get_actor_max_carry_weight(actor)
+dft_get_actor_max_carry_weight = function(actor)
     actor = actor or db.actor
     if not actor then return 80 end
 
@@ -154,7 +151,7 @@ function dft_get_encumbrance_speed_mult()
     return 1.0
 end
 
-function dft_get_encumbrance_time_mult()
+dft_get_encumbrance_time_mult = function()
     local speed = dft_get_encumbrance_speed_mult()
     if speed <= 0 then return 1.0 end
     return 1.0 / speed
@@ -173,14 +170,14 @@ function dft_resolve_arrival_stamina(ambushed, sneaky)
     return target
 end
 
-function dft_sneak_minutes_per_km()
+dft_sneak_minutes_per_km = function()
     local lvl = dft_get_sneaking_level()
     local per_km = dft_travel.sneak_min_per_km - lvl * dft_travel.sneak_min_per_lvl
     return math.max(dft_travel.sneak_min_floor, per_km)
 end
 
 -- Sneak PDA bar runs slower relative to normal; game time scales inversely with effective PDA speed.
-function dft_mode_pda_speed_ratio(sneaky)
+dft_mode_pda_speed_ratio = function(sneaky)
     if not sneaky then return 1.0 end
     return dft_travel.min_per_km / dft_sneak_minutes_per_km()
 end
@@ -264,7 +261,7 @@ function dft_journey_result_style(opts)
     return nil
 end
 
-function dft_format_distance(dist_m)
+dft_format_distance = function(dist_m)
     if not dist_m or dist_m < 0 then return "?m" end
     local d = math.floor(dist_m + 0.5)
     if d >= 1000 then
@@ -274,13 +271,13 @@ function dft_format_distance(dist_m)
     return tostring(d) .. "m"
 end
 
-function dft_is_raining()
+dft_is_raining = function()
     if not level.rain_factor then return false end
     local ok_r, r = pcall(level.rain_factor)
     return ok_r and r and r > 0.1
 end
 
-function dft_get_weather_name()
+dft_get_weather_name = function()
     if not level.get_weather then return nil end
     local ok, w = pcall(level.get_weather)
     if ok and w and w ~= "" then
@@ -321,31 +318,27 @@ function dft_get_time_hours()
     return hours
 end
 
-function dft_is_night_hour(hours)
+dft_is_night_hour = function(hours)
     return hours >= dft_time_of_day.night_start or hours < dft_time_of_day.night_end
 end
 
-function dft_is_twilight_hour(hours)
+dft_is_twilight_hour = function(hours)
     local t = dft_time_of_day
     return (hours >= t.twilight_dawn_start and hours < t.twilight_dawn_end)
         or (hours >= t.twilight_dusk_start and hours < t.twilight_dusk_end)
 end
 
-function dft_time_band(hours)
+dft_time_band = function(hours)
     if dft_is_night_hour(hours) then return "night" end
     if dft_is_twilight_hour(hours) then return "twilight" end
     return "day"
 end
 
-function dft_ambush_time_reduction_m()
+dft_ambush_time_reduction_m = function()
     local band = dft_time_band(dft_get_time_hours())
     if band == "night" then return dft_ambush.time_night_m end
     if band == "twilight" then return dft_ambush.time_twilight_m end
     return 0
-end
-
-function dft_ambush_time_base_radius_m()
-    return dft_ambush.radius_base
 end
 
 -- Ambush detection radius (time + weather stack; normal travel +10m sprinting detection).
@@ -377,7 +370,7 @@ function dft_dbg_sneak_summary(sneaky_mode, roll, chance, dodged)
     end
 end
 
-function dft_get_journey_specs(dist_m)
+dft_get_journey_specs = function(dist_m)
     local enc_mult = dft_get_encumbrance_time_mult()
     local normal_mins = dft_game_minutes_for_dist(dist_m, false, enc_mult)
     local sneaky_mins = dft_game_minutes_for_dist(dist_m, true, enc_mult)
@@ -420,7 +413,7 @@ function dft_award_sneaking_xp(amount)
     pcall(function() haru_skills.increase_skill("sneaking", amount) end)
 end
 
-function dft_apply_sneaking_stat_delta(delta_levels)
+dft_apply_sneaking_stat_delta = function(delta_levels)
     if not (haru_skills and haru_skills.skills_stats and haru_skills.skills_stats.sneaking
         and haru_skills.skills_increments and haru_skills.skills_increments.sneaking) then
         return false
@@ -438,7 +431,7 @@ function dft_apply_sneaking_stat_delta(delta_levels)
     return true
 end
 
-function dft_dev_adjust_sneaking(delta)
+dft_dev_adjust_sneaking = function(delta)
     local ok, err = xpcall(function()
         if not (haru_skills and haru_skills.skills_levels) then
             dft_log("dev sneaking: haru_skills not loaded")
@@ -485,17 +478,6 @@ function dft_format_travel_menu(label_id, dist_str, dur_str, sneak_pct)
     local fmt = dft_str("dft_menu_travel_format")
     local ok, text = pcall(string.format, fmt, label, dist_str or "?m", dur_str or "?", sneak_pct or 0)
     return ok and text or string.format("%s (%s, %s)", label, dist_str or "?m", dur_str or "?")
-end
-
-function dft_get_game_difficulty()
-    local diff = 3
-    if alife_storage_manager and alife_storage_manager.get_state then
-        local st = alife_storage_manager.get_state()
-        if st and st.diff_game and st.diff_game.type then
-            diff = st.diff_game.type
-        end
-    end
-    return diff
 end
 
 -- Average of dft_get_level_danger (01_core) for the origin/destination - backed by our own
@@ -620,50 +602,30 @@ end
 do
     _G.dft_block_fft_travel = dft_block_fft_travel
     _G.dft_get_sneaking_level = dft_get_sneaking_level
-    _G.dft_get_sneaking_sneak_bonus = dft_get_sneaking_sneak_bonus
-    _G.dft_get_sneaking_travel_speed_mult = dft_get_sneaking_travel_speed_mult
-    _G.dft_get_sneaking_ambush_spawn_bonus = dft_get_sneaking_ambush_spawn_bonus
     _G.dft_get_encounter_offset = dft_get_encounter_offset
-    _G.dft_get_actor_max_carry_weight = dft_get_actor_max_carry_weight
     _G.dft_get_inventory_weight_band = dft_get_inventory_weight_band
     _G.dft_actor_too_encumbered_to_move = dft_actor_too_encumbered_to_move
     _G.dft_get_encumbrance_speed_mult = dft_get_encumbrance_speed_mult
-    _G.dft_get_encumbrance_time_mult = dft_get_encumbrance_time_mult
     _G.dft_resolve_arrival_stamina = dft_resolve_arrival_stamina
     _G.dft_game_minutes_for_dist = dft_game_minutes_for_dist
     _G.dft_format_duration = dft_format_duration
     _G.dft_journey_result_message = dft_journey_result_message
     _G.dft_journey_result_style = dft_journey_result_style
-    _G.dft_format_distance = dft_format_distance
-    _G.dft_is_raining = dft_is_raining
-    _G.dft_get_weather_name = dft_get_weather_name
     _G.dft_get_weather_visibility_reduction_m = dft_get_weather_visibility_reduction_m
     _G.dft_get_time_hours = dft_get_time_hours
-    _G.dft_is_night_hour = dft_is_night_hour
-    _G.dft_is_twilight_hour = dft_is_twilight_hour
-    _G.dft_time_band = dft_time_band
-    _G.dft_ambush_time_base_radius_m = dft_ambush_time_base_radius_m
-    _G.dft_ambush_time_reduction_m = dft_ambush_time_reduction_m
-    _G.dft_sneak_minutes_per_km = dft_sneak_minutes_per_km
-    _G.dft_mode_pda_speed_ratio = dft_mode_pda_speed_ratio
     _G.dft_get_effective_pda_speed = dft_get_effective_pda_speed
     _G.dft_ambush_radius_m = dft_ambush_radius_m
     _G.dft_calc_sneak_chance = dft_calc_sneak_chance
     _G.dft_dbg_sneak_summary = dft_dbg_sneak_summary
-    _G.dft_get_journey_specs = dft_get_journey_specs
     _G.dft_journey_specs_for_object = dft_journey_specs_for_object
     _G.dft_ensure_sneaking_skill_options = dft_ensure_sneaking_skill_options
     _G.dft_award_sneaking_xp = dft_award_sneaking_xp
-    _G.dft_apply_sneaking_stat_delta = dft_apply_sneaking_stat_delta
-    _G.dft_dev_adjust_sneaking = dft_dev_adjust_sneaking
     _G.dft_handle_dev_keys = dft_handle_dev_keys
     _G.dft_format_travel_menu = dft_format_travel_menu
-    _G.dft_get_game_difficulty = dft_get_game_difficulty
     _G.dft_calc_guide_cost = dft_calc_guide_cost
     _G.dft_calc_guide_duration_secs = dft_calc_guide_duration_secs
     _G.dft_guide_distance = dft_guide_distance
     _G.dft_do_guide_travel = dft_do_guide_travel
-    _G.dft_sneak_cooldown_minutes = dft_sneak_cooldown_minutes
     _G.dft_sneak_cooldown_remaining_secs = dft_sneak_cooldown_remaining_secs
     _G.dft_start_sneak_cooldown = dft_start_sneak_cooldown
 end

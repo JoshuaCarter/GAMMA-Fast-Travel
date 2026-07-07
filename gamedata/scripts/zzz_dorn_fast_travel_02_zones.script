@@ -3,7 +3,10 @@
 
 -- Shared dft globals (Anomaly isolates zzz_* script environments)
 local dft = _G.dft
-local dft_config = _G.dft_config
+-- Forward declarations for this file's private (non-exported) helpers, so they can
+-- reference each other regardless of definition order below.
+local dft_count_zone_edges, dft_persist_zone_map, dft_scan_transition_object,
+    dft_try_restore_zone_map, dft_zone_map_pack, dft_zone_map_unpack
 function dft_build_level_names_registry()
     if dft.level_registry_built then
         return
@@ -192,7 +195,7 @@ end
 -- Zone topology is static for a given mod loadout; scan once per save and persist via alife_storage_manager.
 local dft_zone_map_version = 1
 
-function dft_count_zone_edges(map)
+dft_count_zone_edges = function(map)
     map = map or dft.dynamic_map or {}
     local n = 0
     for _, dsts in pairs(map) do
@@ -201,7 +204,7 @@ function dft_count_zone_edges(map)
     return n
 end
 
-function dft_zone_map_pack()
+dft_zone_map_pack = function()
     local edges = {}
     for src, dsts in pairs(dft.dynamic_map or {}) do
         for dst, _ in pairs(dsts) do
@@ -217,7 +220,7 @@ function dft_zone_map_pack()
     return { v = dft_zone_map_version, e = edges, r = doors }
 end
 
-function dft_zone_map_unpack(blob)
+dft_zone_map_unpack = function(blob)
     if not (blob and blob.v == dft_zone_map_version and blob.e and #blob.e > 0) then
         return false
     end
@@ -243,13 +246,13 @@ function dft_zone_map_unpack(blob)
     return next(dft.dynamic_map) ~= nil
 end
 
-function dft_persist_zone_map(m_data)
+dft_persist_zone_map = function(m_data)
     if m_data and dft.dynamic_map and next(dft.dynamic_map) then
         m_data.dft_zone_map = dft_zone_map_pack()
     end
 end
 
-function dft_try_restore_zone_map()
+dft_try_restore_zone_map = function()
     local ok, m_data = pcall(alife_storage_manager.get_state)
     if ok and m_data and m_data.dft_zone_map and dft_zone_map_unpack(m_data.dft_zone_map) then
         dft_log("Zone map restored from save (%d transitions).", dft_count_zone_edges())
@@ -268,7 +271,7 @@ function dft_on_save_state(m_data)
     dft_persist_zone_map(m_data)
 end
 
-function dft_scan_transition_object(obj, sim, gg, total_ref)
+dft_scan_transition_object = function(obj, sim, gg, total_ref)
     if not obj then return end
     local cls = 0
     pcall(function() cls = obj:clsid() end)
@@ -434,13 +437,7 @@ end
 do
     _G.dft_build_level_names_registry = dft_build_level_names_registry
     _G.dft_resolve_level_name = dft_resolve_level_name
-    _G.dft_count_zone_edges = dft_count_zone_edges
-    _G.dft_zone_map_pack = dft_zone_map_pack
-    _G.dft_zone_map_unpack = dft_zone_map_unpack
-    _G.dft_persist_zone_map = dft_persist_zone_map
-    _G.dft_try_restore_zone_map = dft_try_restore_zone_map
     _G.dft_on_load_state = dft_on_load_state
     _G.dft_on_save_state = dft_on_save_state
-    _G.dft_scan_transition_object = dft_scan_transition_object
     _G.dft_build_dynamic_map = dft_build_dynamic_map
 end

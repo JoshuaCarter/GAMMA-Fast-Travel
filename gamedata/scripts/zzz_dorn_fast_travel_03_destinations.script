@@ -6,7 +6,13 @@
 -- ============================================================
 -- Shared dft globals (Anomaly isolates zzz_* script environments)
 local dft = _G.dft
-local dft_config = _G.dft_config
+-- Forward declarations for this file's private (non-exported) helpers, so they can
+-- reference each other regardless of definition order below.
+local dft_anomalous_stash_mod_loaded, dft_backpack_menu_markers, dft_has_clear_los,
+    dft_hostile_can_spot_pos, dft_is_anomalous_stash, dft_is_campfire_spot,
+    dft_is_scripted_lc_restrictor, dft_is_viewed_level, dft_level_id_from_gvid,
+    dft_level_offset, dft_levels_match, dft_map_has_any_spot, dft_normalize_level_key,
+    dft_pos_copy
 local dft_spots = {
     -- Engine assigns one directional green-arrow spot per transition (8 horizontals + up/down).
     level_changer = {
@@ -19,7 +25,7 @@ local dft_spots = {
     campfire      = { "campfire_lit", "campfire_unlit" },
 }
 
-function dft_map_has_any_spot(id, spot_names)
+dft_map_has_any_spot = function(id, spot_names)
     for i = 1, #spot_names do
         if level.map_has_object_spot(id, spot_names[i]) ~= 0 then return true end
     end
@@ -45,7 +51,7 @@ end
 -- up with a generic "primary_object" spot and a custom hint/name instead. Without this check
 -- those PDA markers fell through every category (not lc/base/campfire/stash) and the menu
 -- silently added nothing at all, even though they're a real, valid transition.
-function dft_is_scripted_lc_restrictor(id, se_obj)
+dft_is_scripted_lc_restrictor = function(id, se_obj)
     if not se_obj then se_obj = alife_object(id) end
     if not se_obj then return false end
     local cls = 0
@@ -78,10 +84,6 @@ function dft_is_place_like_spot(se_obj)
     if cls == clsid.level_changer or (clsid.level_changer_s and cls == clsid.level_changer_s) then return true end
     if cls == clsid.script_restr or cls == clsid.space_restrictor then return true end
     return false
-end
-
-function dft_is_level_changer_spot(id)
-    return dft_is_pda_transition(id)
 end
 
 function dft_read_transition_dest_info(se_obj)
@@ -118,51 +120,7 @@ function dft_read_transition_dest_info(se_obj)
     return nil
 end
 
-function dft_is_in_door_registry(id)
-    if not (id and dft.door_registry) then return false end
-    for _, dsts in pairs(dft.door_registry) do
-        for _, ids in pairs(dsts) do
-            for i = 1, #ids do
-                if ids[i] == id then return true end
-            end
-        end
-    end
-    return false
-end
-
-function dft_object_is_level_changer(id, se_obj)
-    -- Door-registry discovery only (offline heuristics). PDA menu uses dft_is_pda_transition (map spot).
-    if not se_obj then se_obj = alife_object(id) end
-    if not se_obj then return false end
-
-    local cls = 0
-    pcall(function() cls = se_obj:clsid() end)
-    if cls == clsid.level_changer or (clsid.level_changer_s and cls == clsid.level_changer_s) then
-        return true
-    end
-
-    if cls == clsid.script_restr or cls == clsid.space_restrictor then
-        local ini = se_obj:spawn_ini()
-        if ini and ini:section_exist("sr_level_changer") then
-            return true
-        end
-        local obj_name = string.lower(se_obj:name() or "")
-        if string.find(obj_name, "_to_", 1, true) then
-            return true
-        end
-    end
-
-    local sec = nil
-    pcall(function() sec = se_obj:section_name() end)
-    if sec and _G.lc_extra_transitions and _G.lc_extra_transitions.lc_pool
-        and _G.lc_extra_transitions.lc_pool[sec] then
-        return true
-    end
-
-    return dft_is_in_door_registry(id)
-end
-
-function dft_is_campfire_spot(id)
+dft_is_campfire_spot = function(id)
     return dft_map_has_any_spot(id, dft_spots.campfire)
 end
 
@@ -180,23 +138,6 @@ function dft_collect_object_spots(id)
         end
     end
     return spots
-end
-
-function dft_collect_lc_spot_ids()
-    if dft.lc_spot_ids then return dft.lc_spot_ids end
-    local ids = {}
-    if alife() then
-        pcall(function()
-            for _, obj in alife():objects() do
-                if obj and obj.id and dft_is_pda_transition(obj.id) then
-                    ids[#ids + 1] = obj.id
-                end
-            end
-        end)
-    end
-    dft.lc_spot_ids = ids
-    dft_log("cached %d LC spot object ids", #ids)
-    return ids
 end
 
 function dft_vec_str(v)
@@ -225,11 +166,11 @@ function dft_is_campfire(id, se_obj)
 end
 
 -- Optional integration: The Anomalous Stash mod (anomalous_stash.script). Not required for dft.
-function dft_anomalous_stash_mod_loaded()
+dft_anomalous_stash_mod_loaded = function()
     return rawget(_G, "anomalous_stash") ~= nil
 end
 
-function dft_is_anomalous_stash(id, se_obj)
+dft_is_anomalous_stash = function(id, se_obj)
     if not id or id <= 0 or not dft_anomalous_stash_mod_loaded() then return false end
     local ok, owned = pcall(function()
         local mod = rawget(_G, "anomalous_stash")
@@ -319,13 +260,13 @@ function dft_distance_pda(a, b)
     return ok and dist or nil
 end
 
-function dft_level_offset(level_id)
+dft_level_offset = function(level_id)
     if not level_id then return { x = 0, y = 0, z = 0 } end
     dft_build_level_names_registry()
     return dft.level_offsets[level_id] or { x = 0, y = 0, z = 0 }
 end
 
-function dft_level_id_from_gvid(gvid)
+dft_level_id_from_gvid = function(gvid)
     if not (gvid and game_graph) then return nil end
     local gg = game_graph()
     if not (gg and gg.valid_vertex_id and gg:valid_vertex_id(gvid)) then return nil end
@@ -379,7 +320,7 @@ function dft_hostile_near_pos(from_pos, to_pos, radius)
 end
 
 -- True when enemy at enemy_pos can detect scan_pos within radius (horizontal+vertical or LOS).
-function dft_hostile_can_spot_pos(enemy_pos, scan_pos, radius)
+dft_hostile_can_spot_pos = function(enemy_pos, scan_pos, radius)
     if not (enemy_pos and scan_pos and radius) then return false end
     local horiz = dft_horizontal_dist(enemy_pos, scan_pos)
     if not horiz or horiz >= radius then return false end
@@ -388,7 +329,7 @@ function dft_hostile_can_spot_pos(enemy_pos, scan_pos, radius)
     return dft_has_clear_los(enemy_pos, scan_pos, radius)
 end
 
-function dft_has_clear_los(from_pos, to_pos, max_dist)
+dft_has_clear_los = function(from_pos, to_pos, max_dist)
     if not (from_pos and to_pos) then return false end
     if not (ray_pick and rq_target) then
         return dft_horizontal_dist(from_pos, to_pos) <= (max_dist or 60)
@@ -426,7 +367,7 @@ end
 
 local BP_MENU_MARKERS = nil
 
-function dft_backpack_menu_markers()
+dft_backpack_menu_markers = function()
     if not BP_MENU_MARKERS then
         BP_MENU_MARKERS = {
             game.translate_string("bp_to"),
@@ -460,7 +401,7 @@ function dft_strip_backpack_travel_menu_items(pui)
     end)
 end
 
-function dft_pos_copy(pos)
+dft_pos_copy = function(pos)
     if not (pos and pos.x) then return nil end
     return vector():set(pos.x, pos.y or 0, pos.z)
 end
@@ -486,7 +427,7 @@ function dft_graph_vertex_target(gvid)
     }
 end
 
-function dft_normalize_level_key(name)
+dft_normalize_level_key = function(name)
     if not name then return nil end
     if type(name) == "number" then
         dft_build_level_names_registry()
@@ -502,12 +443,12 @@ function dft_normalize_level_key(name)
     return name
 end
 
-function dft_levels_match(a, b)
+dft_levels_match = function(a, b)
     if not a or not b then return false end
     return dft_normalize_level_key(a) == dft_normalize_level_key(b)
 end
 
-function dft_is_viewed_level(ln)
+dft_is_viewed_level = function(ln)
     local cur = level and level.name and level.name()
     if not (ln and cur) then return true end
     return dft_levels_match(ln, cur)
@@ -834,44 +775,26 @@ end
 
 -- dft_publish_to_global
 do
-    _G.dft_map_has_any_spot = dft_map_has_any_spot
     _G.dft_get_level_changer_spot = dft_get_level_changer_spot
     _G.dft_is_pda_transition = dft_is_pda_transition
-    _G.dft_is_scripted_lc_restrictor = dft_is_scripted_lc_restrictor
     _G.dft_is_place_like_spot = dft_is_place_like_spot
-    _G.dft_is_level_changer_spot = dft_is_level_changer_spot
     _G.dft_read_transition_dest_info = dft_read_transition_dest_info
-    _G.dft_is_in_door_registry = dft_is_in_door_registry
-    _G.dft_object_is_level_changer = dft_object_is_level_changer
-    _G.dft_is_campfire_spot = dft_is_campfire_spot
     _G.dft_collect_object_spots = dft_collect_object_spots
-    _G.dft_collect_lc_spot_ids = dft_collect_lc_spot_ids
     _G.dft_vec_str = dft_vec_str
     _G.dft_is_base = dft_is_base
     _G.dft_is_campfire = dft_is_campfire
-    _G.dft_anomalous_stash_mod_loaded = dft_anomalous_stash_mod_loaded
-    _G.dft_is_anomalous_stash = dft_is_anomalous_stash
     _G.dft_is_player_stash = dft_is_player_stash
     _G.dft_is_travel_destination = dft_is_travel_destination
     _G.dft_log_menu_diag = dft_log_menu_diag
     _G.dft_distance_pda = dft_distance_pda
-    _G.dft_level_offset = dft_level_offset
-    _G.dft_level_id_from_gvid = dft_level_id_from_gvid
     _G.dft_actor_level_id = dft_actor_level_id
     _G.dft_object_level_id = dft_object_level_id
     _G.dft_pda_distance = dft_pda_distance
     _G.dft_hostile_near_pos = dft_hostile_near_pos
-    _G.dft_hostile_can_spot_pos = dft_hostile_can_spot_pos
-    _G.dft_has_clear_los = dft_has_clear_los
     _G.dft_unregister_fft_map_handlers = dft_unregister_fft_map_handlers
-    _G.dft_backpack_menu_markers = dft_backpack_menu_markers
     _G.dft_strip_backpack_travel_menu_items = dft_strip_backpack_travel_menu_items
-    _G.dft_pos_copy = dft_pos_copy
     _G.dft_pos_drift = dft_pos_drift
     _G.dft_graph_vertex_target = dft_graph_vertex_target
-    _G.dft_normalize_level_key = dft_normalize_level_key
-    _G.dft_levels_match = dft_levels_match
-    _G.dft_is_viewed_level = dft_is_viewed_level
     _G.dft_object_on_actor_level = dft_object_on_actor_level
     _G.dft_object_position = dft_object_position
     _G.dft_distance_to_object = dft_distance_to_object
