@@ -20,6 +20,13 @@ function on_mcm_load()
 						def = 30,
 						hint = "dorn_fast_travel_message_duration",
 					},
+					{
+						id = "block_transition_in_combat",
+						type = "check",
+						val = 1,
+						def = true,
+						hint = "dorn_fast_travel_block_transition_in_combat",
+					},
 				},
 			},
 			{

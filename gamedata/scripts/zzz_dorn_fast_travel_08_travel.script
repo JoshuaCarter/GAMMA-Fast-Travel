@@ -9,7 +9,8 @@ local dft = _G.dft
 -- Forward declarations for this file's private (non-exported) helpers, so they can
 -- reference each other regardless of definition order below.
 local dft_apply_final_stats, dft_cancel_journey_emission, dft_complete_travel_sequence,
-    dft_detect_ambush, dft_force_end_surge, dft_get_surge_manager, dft_is_emission_active,
+    dft_detect_ambush, dft_enforce_transition_combat_lock, dft_force_end_surge,
+    dft_get_surge_manager, dft_is_emission_active,
     dft_journey_path_ratio, dft_plan_emission_interrupt, dft_play_fade_teleport,
     dft_seconds_until_surge, dft_should_emission_interrupt, dft_trigger_emission_interrupt,
     dft_trigger_encounter, dft_update_sneak_cooldown_hud
@@ -505,6 +506,66 @@ dft_update_sneak_cooldown_hud = function()
 end
 
 -- ============================================================
+-- Zone-transition combat lock
+-- ============================================================
+-- Runs continuously (not just during a fast-travel journey) so it covers walking up to a real
+-- level changer under fire just as much as it covers the moment this mod's own zone-exit
+-- journey drops the actor off next to one. While an alerted enemy is actively engaging the
+-- actor within ambush range, every transition trigger on the current level is hard-disabled
+-- at the engine level (see dft_set_current_level_changers_locked) - touching one then does
+-- nothing at all, no matter where the actor is standing or how they got there. Once nothing
+-- is actively hunting the actor (or they back off out of ambush range), the lock lifts and
+-- crossings work normally again.
+dft_enforce_transition_combat_lock = function()
+    local cfg = _G.dft_config
+    if cfg and cfg.block_transition_in_combat == false then
+        if dft._transition_locked then
+            dft_set_current_level_changers_locked(false)
+            dft._transition_locked = false
+        end
+        return
+    end
+    -- Mid fast-travel journey the actor's real position is teleport-managed elsewhere; the
+    -- zone-exit arrival itself syncs the lock directly (see dft_complete_travel_sequence).
+    if dft.is_traveling then return end
+    if not (db.actor and db.actor:alive()) then return end
+
+    local tg = time_global()
+    local guard = _G.dft_transition_guard or {}
+    local interval = guard.scan_interval_ms or 150
+    if dft._transition_guard_next and tg < dft._transition_guard_next then return end
+    dft._transition_guard_next = tg + interval
+
+    local actor_pos = db.actor:position()
+    local radius = dft_ambush_radius_m(false)
+    local alerted, enemy_dist = dft_alerted_enemy_within(actor_pos, radius)
+
+    if alerted ~= dft._transition_locked then
+        dft_set_current_level_changers_locked(alerted)
+        dft._transition_locked = alerted
+        dft_log("Transition lock %s (nearest alerted enemy: %s).",
+            alerted and "ENGAGED - border crossings disabled" or "RELEASED - crossings re-enabled",
+            alerted and (tostring(enemy_dist) .. "m") or "none within " .. math.floor(radius) .. "m")
+    end
+
+    -- Only worth telling the player about the lock if they're actually near a door right now -
+    -- otherwise it fires the instant combat starts anywhere on the level, regardless of where
+    -- they are, which reads as a non-sequitur.
+    if alerted then
+        local buffer_m = guard.buffer_m or 12
+        local search_pad_m = guard.search_pad_m or 15
+        local _, door_dist = dft_nearest_transition_point(actor_pos, buffer_m + search_pad_m)
+        if door_dist and door_dist <= buffer_m then
+            local msg_cooldown_ms = (guard.msg_cooldown_s or 5) * 1000
+            if not dft._transition_guard_last_msg or (tg - dft._transition_guard_last_msg) > msg_cooldown_ms then
+                dft._transition_guard_last_msg = tg
+                dft_msg(dft_str("dft_msg_transition_combat_blocked"), "danger")
+            end
+        end
+    end
+end
+
+-- ============================================================
 -- 6. Update Loop
 -- ============================================================
 function dft_actor_on_update()
@@ -513,6 +574,8 @@ function dft_actor_on_update()
         dft._last_sneak_cd_ui_tick = tg_ui
         pcall(dft_update_sneak_cooldown_hud)
     end
+
+    pcall(dft_enforce_transition_combat_lock)
 
     if dft.is_traveling and dft_emission_started_unexpectedly() then
         dft_cancel_journey_emission()
@@ -698,6 +761,22 @@ dft_complete_travel_sequence = function()
     local final_pos, final_lvid
     if dft.is_transition then
         final_pos, final_lvid = dft_find_ground_pos(dft.dest_raw_pos or dft.dest_pos, dft.dest_lvid, dft.dest_gvid)
+        -- Land exactly on the natural exit point - no position pull-back. Instead, sync the
+        -- exit's engine-level enabled state right now: if an alerted enemy is still within
+        -- ambush range, the level changer(s) on this level stay hard-disabled (native engine
+        -- flag - touching one is a complete no-op, confirmation dialog included) until the
+        -- actor clears the threat, same as dft_enforce_transition_combat_lock does for anyone
+        -- who walked up to a border under fire. dft.is_traveling is still true here, so that
+        -- per-tick guard is skipped for this frame - keep its cached lock state in sync too.
+        if final_pos then
+            local alerted = dft_alerted_enemy_within(final_pos, dft_ambush_radius_m(false))
+            dft_set_current_level_changers_locked(alerted)
+            dft._transition_locked = alerted
+            if alerted then
+                dft_log("Transition arrival: alerted enemy nearby - exit locked at (%.1f,%.1f,%.1f).",
+                    final_pos.x, final_pos.y, final_pos.z)
+            end
+        end
         dft_log("Transition Teleport: pos=(%f, %f, %f)", final_pos.x, final_pos.y, final_pos.z)
     else
         local forced_arrival = 0

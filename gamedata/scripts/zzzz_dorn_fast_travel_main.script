@@ -2,7 +2,7 @@
 -- Module libs load first as zzz_dorn_fast_travel_*.script
 
 local MOD_ID = "dorn_fast_travel"
-local DORN_COMMON_VERSION = "dorn_common_105895da" -- managed by sync-dorn-common.sh
+local DORN_COMMON_VERSION = "dorn_common_f575cc9b" -- managed by sync-dorn-common.sh
 _G.dft_config = _G.dft_config or {}
 local dft_config = _G.dft_config
 local dft = _G.dft
@@ -42,6 +42,7 @@ local get_config_defaults = {
     message_duration = 30,
     debug_log        = false,
     path_preview     = false,
+    block_transition_in_combat = true,
 }
 
 get_config = function(key)
@@ -56,6 +57,8 @@ local function load_config()
     dft_config.debug_log = get_config("debug_log") == true
     local pp = get_config("path_preview")
     dft_config.path_preview = (pp == true or pp == 1)
+    local btic = get_config("block_transition_in_combat")
+    dft_config.block_transition_in_combat = not (btic == false or btic == 0)
     local dft_dorn = _G.dft and _G.dft.dorn
     dft_config.sneaking_level_up = dft_dorn and dft_dorn.mcm
         and dft_dorn.mcm.key(MOD_ID, MCM_SECTION_DEV .. "/sneaking_level_up", nil)

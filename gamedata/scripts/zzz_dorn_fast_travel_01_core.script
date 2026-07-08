@@ -60,6 +60,8 @@ local dft_defaults = {
     graph_lvid_map      = nil,  -- [lvid] = gvid
     graph_cache_level   = nil,
     graph_cache_name    = nil,
+    door_pos_cache      = nil,  -- [vector] transition-trigger positions leading out of the current level
+    door_pos_cache_level = nil,
     menu_resolve_cache  = nil,  -- { seq, id, ln, target, err } — one resolve per map menu open
     menu_path_cache     = nil,  -- { seq, id, chain, is_vertex, path_len, raw_chain } — one path build per menu open
     encumbrance_time_mult = 1.0,
@@ -220,6 +222,20 @@ _G.dft_time_of_day = {
 
 _G.dft_arrival = {
     reroute_max = 10,
+}
+
+-- Zone-transition combat lock: hard-disables every level transition trigger on the current
+-- level (native engine flag via game_object:enable_level_changer - not a position clamp) while
+-- an alerted enemy is actively engaging the actor within ambush range. Applies regardless of
+-- how the actor got there - on foot, or just dropped off at a zone exit by this mod's own fast
+-- travel - and regardless of where on the level they're standing. Reuses dft_ambush_radius_m
+-- for the "is anyone alerted nearby" range so it's already forgiving at night/in bad weather,
+-- same as every other ambush check in this mod.
+_G.dft_transition_guard = {
+    buffer_m         = 12, -- how close to a door counts as "near it" for the on-screen warning
+    search_pad_m     = 15, -- extra search radius added on top of buffer_m when locating that door
+    scan_interval_ms = 150,
+    msg_cooldown_s   = 5,
 }
 
 _G.dft_path = {

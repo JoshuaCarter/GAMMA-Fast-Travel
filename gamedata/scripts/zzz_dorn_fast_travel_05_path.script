@@ -391,6 +391,123 @@ dft_has_nearby_hostiles_at = function(pos, radius, level_id)
     return #targets.squads > 0 or #targets.npcs > 0
 end
 
+-- Unlike dft_collect_hostiles_at (faction/relation based - flags anyone hostile whether or not
+-- they've noticed the actor), this checks actual awareness: is any online stalker/monster
+-- within radius currently targeting the actor as its best_enemy()? That's the engine's own
+-- combat-AI notion of "who this NPC is actively hunting right now", so it only fires for
+-- enemies genuinely engaging the player, not just any hostile-faction NPC standing nearby.
+function dft_alerted_enemy_within(pos, radius)
+    if not (pos and db.actor and db.storage) then return false end
+    radius = radius or dft_hostile.radius_m
+    local actor_id = db.actor:id()
+    local best_dist, best_id = nil, nil
+    for id, _ in pairs(db.storage) do
+        if id ~= actor_id then
+            local npc = level.object_by_id(id)
+            if npc then
+                local is_creature = false
+                pcall(function() is_creature = IsStalker(npc) or IsMonster(npc) end)
+                if is_creature then
+                    local ok_alive, alive = pcall(function() return npc:alive() end)
+                    if ok_alive and alive then
+                        local ok_p, np = pcall(function() return npc:position() end)
+                        if ok_p and np then
+                            local d = dft_horizontal_dist(pos, np) or pos:distance_to(np)
+                            if d and d <= radius and (not best_dist or d < best_dist) then
+                                local ok_e, enemy = pcall(function() return npc:best_enemy() end)
+                                if ok_e and enemy then
+                                    local ok_id, eid = pcall(function() return enemy:id() end)
+                                    if ok_id and eid == actor_id then
+                                        best_dist = d
+                                        best_id = id
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return best_id ~= nil, best_dist, best_id
+end
+
+-- Positions of every transition trigger (native level changer or scripted sr_level_changer
+-- restrictor) leading out of the current level, from the door registry already built by
+-- dft_build_dynamic_map (02_zones). Cached per level so dft_enforce_transition_combat_lock
+-- (08_travel) can poll it every tick cheaply.
+local function dft_rebuild_door_position_cache(lvl_name)
+    local cache = {}
+    local dsts = dft.door_registry and dft.door_registry[lvl_name]
+    if dsts then
+        for _, ids in pairs(dsts) do
+            for i = 1, #ids do
+                local obj_id = ids[i]
+                local pos = nil
+                local se_obj = alife_object(obj_id)
+                if se_obj and se_obj.position then pos = se_obj.position end
+                if not pos then
+                    local online = level.object_by_id(obj_id)
+                    if online then
+                        local ok, p = pcall(function() return online:position() end)
+                        if ok then pos = p end
+                    end
+                end
+                if pos then
+                    cache[#cache + 1] = vector():set(pos.x, pos.y, pos.z)
+                end
+            end
+        end
+    end
+    dft.door_pos_cache = cache
+    dft.door_pos_cache_level = lvl_name
+end
+
+-- Nearest transition-trigger position to pos within max_m, or nil if none registered/in range.
+function dft_nearest_transition_point(pos, max_m)
+    if not pos then return nil, nil end
+    local lvl_name = dft_resolve_level_name(dft_actor_level_id())
+    if dft.door_pos_cache_level ~= lvl_name then
+        dft_rebuild_door_position_cache(lvl_name)
+    end
+    local cache = dft.door_pos_cache or {}
+    local best_d, best_pos = nil, nil
+    for i = 1, #cache do
+        local d = dft_horizontal_dist(pos, cache[i]) or pos:distance_to(cache[i])
+        if (not max_m or d <= max_m) and (not best_d or d < best_d) then
+            best_d = d
+            best_pos = cache[i]
+        end
+    end
+    return best_pos, best_d
+end
+
+-- Native, engine-level hard block for every transition trigger leading out of the current
+-- level. CLevelChanger (the C++ object behind every real "level_changer" spawn) exposes
+-- enable_level_changer(bool) straight from Lua: when disabled, feel_touch_new's own check
+-- (`if (m_b_enabled)`) makes touching it a complete no-op for silent transitions, and for
+-- confirmation-dialog ones the engine passes the disabled flag through to the change-level
+-- UI itself. This is the same toggle "Areas transition without confirmation"-style mods use
+-- to manipulate level changers from script - not a position clamp, so it works identically
+-- no matter where the player is standing, how they got there (on foot or teleported in by a
+-- fast-travel arrival), or what the surrounding terrain looks like. Silently no-ops (via the
+-- engine's own smart_cast guard) on any door_registry entry that isn't a real CLevelChanger
+-- (e.g. some scripted/extra-transition restrictors from other addons), which is a safe
+-- fallback - it just means the tiny minority of non-native transitions aren't hard-blocked.
+function dft_set_current_level_changers_locked(locked)
+    local lvl_name = dft_resolve_level_name(dft_actor_level_id())
+    local dsts = lvl_name and dft.door_registry and dft.door_registry[lvl_name]
+    if not dsts then return end
+    for _, ids in pairs(dsts) do
+        for i = 1, #ids do
+            local obj = level.object_by_id(ids[i])
+            if obj then
+                pcall(function() obj:enable_level_changer(not locked) end)
+            end
+        end
+    end
+end
+
 dft_nearest_hostile_world = function(targets, near_pos)
     if not targets then return nil, nil end
     local best_d, nearest = nil, nil
@@ -1965,6 +2082,9 @@ do
     _G.dft_get_safe_pos = dft_get_safe_pos
     _G.dft_apply_travel_offset = dft_apply_travel_offset
     _G.dft_collect_hostiles_at = dft_collect_hostiles_at
+    _G.dft_alerted_enemy_within = dft_alerted_enemy_within
+    _G.dft_nearest_transition_point = dft_nearest_transition_point
+    _G.dft_set_current_level_changers_locked = dft_set_current_level_changers_locked
     _G.dft_nearest_hostile_dist_m = dft_nearest_hostile_dist_m
     _G.dft_ambush_ground_snap = dft_ambush_ground_snap
     _G.dft_log_ambush_scan = dft_log_ambush_scan

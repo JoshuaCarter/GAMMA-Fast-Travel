@@ -11,6 +11,12 @@
 	<string id="ui_mcm_dorn_fast_travel_message_duration_desc">
 		<text>How long travel notifications stay on screen (seconds). See PDA Guide > Addons > Dorn's Fast Travel for travel rules.</text>
 	</string>
+	<string id="ui_mcm_dorn_fast_travel_block_transition_in_combat">
+		<text>Block Zone Transitions in Combat</text>
+	</string>
+	<string id="ui_mcm_dorn_fast_travel_block_transition_in_combat_desc">
+		<text>Prevents crossing a level transition (on foot or via fast travel) while an alerted enemy is actively engaging you within ambush range. On by default.</text>
+	</string>
 	<string id="ui_mcm_dorn_fast_travel_development_section">
 		<text>Development</text>
 	</string>
