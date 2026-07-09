@@ -12,7 +12,7 @@ local dft = _G.dft
 -- dft_abort_journey are the only two functions here any other DFT script calls, so they
 -- alone stay bare globals (see the publish block at the end of this file). on_game_start
 -- is NOT in this list - X-Ray calls it directly per-file at boot (see
--- dorn_common_7367f5e7.script's header comment), so it must stay a real bare top-level
+-- dorn_common_f575cc9b.script's header comment), so it must stay a real bare top-level
 -- function, never a local, even though no other DFT script calls it by name.
 local mcm_option_path, get_config, actor_on_before_hit, on_option_change,
     on_loading_screen_dismissed, actor_on_first_update, dft_menu_item_is_ours,
@@ -129,7 +129,7 @@ function dft_abort_journey(reason)
     if dft.travel_dist and dft.travel_dist > 0 then
         ratio = math.min(dft.current_dist / dft.travel_dist, 1.0)
     end
-    local refund = dft_process_refund(ratio)
+    dft_process_refund(ratio)
 
     dft_log("Journey cancelled (%.0f%% complete, reason=%s) - actor stays in place.", ratio * 100, tostring(reason or "manual"))
     dft_cleanup_dots()
