@@ -291,17 +291,17 @@ function dft_get_weather_visibility_reduction_m()
     local reduction = 0
     local w = dft_get_weather_name()
     if w then
-        if string.find(w, "fog") then
+        if string.find(w, "fog", 1, true) then
             reduction = reduction + dft_ambush.weather_fog_m
         end
-        if string.find(w, "storm") then
+        if string.find(w, "storm", 1, true) then
             reduction = reduction + dft_ambush.weather_storm_m
-        elseif string.find(w, "rain") then
+        elseif string.find(w, "rain", 1, true) then
             reduction = reduction + dft_ambush.weather_rain_m
         end
     end
     if dft_is_raining() then
-        local has_rain = w and (string.find(w, "rain") or string.find(w, "storm"))
+        local has_rain = w and (string.find(w, "rain", 1, true) or string.find(w, "storm", 1, true))
         if not has_rain then
             reduction = reduction + dft_ambush.weather_rain_m
         end

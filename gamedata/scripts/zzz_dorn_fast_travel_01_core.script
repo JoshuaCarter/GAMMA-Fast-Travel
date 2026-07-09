@@ -427,12 +427,12 @@ end
 function dft_is_trader_restrictor(name)
     if not name then return false end
     local low_name = string.lower(name)
-    return string.find(low_name, "trader") ~= nil
-        or string.find(low_name, "merchant") ~= nil
-        or string.find(low_name, "barman") ~= nil
-        or string.find(low_name, "sidorovich") ~= nil
-        or string.find(low_name, "saharov") ~= nil
-        or string.find(low_name, "forester") ~= nil
+    return string.find(low_name, "trader", 1, true) ~= nil
+        or string.find(low_name, "merchant", 1, true) ~= nil
+        or string.find(low_name, "barman", 1, true) ~= nil
+        or string.find(low_name, "sidorovich", 1, true) ~= nil
+        or string.find(low_name, "saharov", 1, true) ~= nil
+        or string.find(low_name, "forester", 1, true) ~= nil
 end
 
 -- %c[] prefixes work reliably in news_manager.send_tip.

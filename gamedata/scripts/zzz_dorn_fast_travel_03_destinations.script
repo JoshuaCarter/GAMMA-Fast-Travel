@@ -214,6 +214,7 @@ function dft_is_travel_destination(id)
 end
 
 function dft_log_menu_diag(id, se_obj, ln, hint)
+    local tostr = tostring
     local cls, sec, name = 0, "?", "?"
     if se_obj then
         pcall(function() cls = se_obj:clsid() end)
@@ -228,9 +229,9 @@ function dft_log_menu_diag(id, se_obj, ln, hint)
     local dest_str = "n/a"
     if dest then
         if dest.dest_level then
-            dest_str = tostring(dest.dest_level)
+            dest_str = tostr(dest.dest_level)
         elseif dest.dest_gvid then
-            dest_str = "gvid=" .. tostring(dest.dest_gvid)
+            dest_str = "gvid=" .. tostr(dest.dest_gvid)
         end
         if dest.dest_pos then
             dest_str = dest_str .. " pos=" .. dft_vec_str(dest.dest_pos)
@@ -238,14 +239,14 @@ function dft_log_menu_diag(id, se_obj, ln, hint)
     end
     dft_log(
         "menu-diag: hint=%s | id=%s ln=%s cur=%s | cls=%s sec=%s name=%s | clicked_lc=%s scripted_lc=%s all_spots=[%s] trans_dest=%s | pda_trans=%s campfire=%s base=%s stash=%s",
-        tostring(hint or "none"),
-        tostring(id), tostring(ln), tostring(level and level.name and level.name()),
-        tostring(cls), tostring(sec), tostring(name),
-        tostring(lc_spot or "none"), tostring(is_scripted_lc), spots_str, dest_str,
-        tostring(dft_is_pda_transition(id, se_obj)),
-        tostring(dft_is_campfire(id, se_obj)),
-        tostring(dft_is_base(id, se_obj)),
-        tostring(dft_is_player_stash(id, se_obj))
+        tostr(hint or "none"),
+        tostr(id), tostr(ln), tostr(level and level.name and level.name()),
+        tostr(cls), tostr(sec), tostr(name),
+        tostr(lc_spot or "none"), tostr(is_scripted_lc), spots_str, dest_str,
+        tostr(dft_is_pda_transition(id, se_obj)),
+        tostr(dft_is_campfire(id, se_obj)),
+        tostr(dft_is_base(id, se_obj)),
+        tostr(dft_is_player_stash(id, se_obj))
     )
 end
 

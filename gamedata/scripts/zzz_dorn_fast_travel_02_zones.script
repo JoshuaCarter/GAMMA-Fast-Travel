@@ -8,6 +8,7 @@ local dft = _G.dft
 local dft_count_zone_edges, dft_persist_zone_map, dft_scan_transition_object,
     dft_try_restore_zone_map, dft_zone_map_pack, dft_zone_map_unpack
 function dft_build_level_names_registry()
+    local sgsub = string.gsub
     if dft.level_registry_built then
         return
     end
@@ -38,14 +39,14 @@ function dft_build_level_names_registry()
             local id = tonumber(id_str)
             if name and id then
                 name = string.lower(name)
-                name = string.gsub(name, "dark_valley", "l04_darkvalley")
-                name = string.gsub(name, "truck_cemetery", "k02_trucks_cemetery")
-                name = string.gsub(name, "army_warehouses", "l07_military")
-                name = string.gsub(name, "army_warehouse", "l07_military")
-                name = string.gsub(name, "swamp", "k00_marsh")
-                name = string.gsub(name, "y04_pole", "meadow")
-                name = string.gsub(name, "^pole$", "meadow")
-                name = string.gsub(name, "l10_limansk", "limansk")
+                name = sgsub(name, "dark_valley", "l04_darkvalley")
+                name = sgsub(name, "truck_cemetery", "k02_trucks_cemetery")
+                name = sgsub(name, "army_warehouses", "l07_military")
+                name = sgsub(name, "army_warehouse", "l07_military")
+                name = sgsub(name, "swamp", "k00_marsh")
+                name = sgsub(name, "y04_pole", "meadow")
+                name = sgsub(name, "^pole$", "meadow")
+                name = sgsub(name, "l10_limansk", "limansk")
 
                 local canonical = {
                     ["garbage"] = "l02_garbage",
@@ -102,6 +103,7 @@ function dft_build_level_names_registry()
 end
 
 function dft_resolve_level_name(level_id)
+    local sgsub = string.gsub
     if not level_id then return nil end
     if next(dft.level_names) == nil then
         dft_build_level_names_registry()
@@ -142,14 +144,14 @@ function dft_resolve_level_name(level_id)
     -- Normalize common GAMMA / Modpack / Akagi variations
     if name then
         name = string.lower(name)
-        name = string.gsub(name, "dark_valley", "l04_darkvalley")
-        name = string.gsub(name, "truck_cemetery", "k02_trucks_cemetery")
-        name = string.gsub(name, "army_warehouses", "l07_military")
-        name = string.gsub(name, "army_warehouse", "l07_military")
-        name = string.gsub(name, "swamp", "k00_marsh")
-        name = string.gsub(name, "y04_pole", "meadow")
-        name = string.gsub(name, "^pole$", "meadow")
-        name = string.gsub(name, "l10_limansk", "limansk")
+        name = sgsub(name, "dark_valley", "l04_darkvalley")
+        name = sgsub(name, "truck_cemetery", "k02_trucks_cemetery")
+        name = sgsub(name, "army_warehouses", "l07_military")
+        name = sgsub(name, "army_warehouse", "l07_military")
+        name = sgsub(name, "swamp", "k00_marsh")
+        name = sgsub(name, "y04_pole", "meadow")
+        name = sgsub(name, "^pole$", "meadow")
+        name = sgsub(name, "l10_limansk", "limansk")
 
         -- Map common plain names to canonical IDs
         local canonical = {
@@ -291,7 +293,7 @@ dft_scan_transition_object = function(obj, sim, gg, total_ref)
                         dft.dynamic_map[src_name][dst_name] = true
                         dft.door_registry[src_name] = dft.door_registry[src_name] or {}
                         dft.door_registry[src_name][dst_name] = dft.door_registry[src_name][dst_name] or {}
-                        table.insert(dft.door_registry[src_name][dst_name], obj.id)
+                        dft.door_registry[src_name][dst_name][#dft.door_registry[src_name][dst_name]+1] = obj.id
                         total_ref[1] = total_ref[1] + 1
                     end
                 end
@@ -302,7 +304,7 @@ dft_scan_transition_object = function(obj, sim, gg, total_ref)
         local ini = obj:spawn_ini()
         local is_lc = ini and ini:section_exist("sr_level_changer")
         local obj_name = string.lower(obj:name())
-        local is_name_match = string.find(obj_name, "_to_") ~= nil
+        local is_name_match = string.find(obj_name, "_to_", 1, true) ~= nil
 
         if not dft_is_trader_restrictor(obj_name) and is_lc then
             local src_name, dst_name
@@ -320,7 +322,7 @@ dft_scan_transition_object = function(obj, sim, gg, total_ref)
 
             if not dst_name and (has_marker or is_name_match) then
                 local dest_part = obj_name
-                local to_idx = string.find(obj_name, "_to_")
+                local to_idx = string.find(obj_name, "_to_", 1, true)
                 if to_idx then dest_part = string.sub(obj_name, to_idx + 4) end
                 for lvl_key, keywords in pairs(dft_door_keywords) do
                     for _, kw in ipairs(keywords) do
@@ -362,7 +364,7 @@ dft_scan_transition_object = function(obj, sim, gg, total_ref)
                 dft.dynamic_map[src_name][dst_name] = true
                 dft.door_registry[src_name] = dft.door_registry[src_name] or {}
                 dft.door_registry[src_name][dst_name] = dft.door_registry[src_name][dst_name] or {}
-                table.insert(dft.door_registry[src_name][dst_name], obj.id)
+                dft.door_registry[src_name][dst_name][#dft.door_registry[src_name][dst_name]+1] = obj.id
                 total_ref[1] = total_ref[1] + 1
             end
         end
