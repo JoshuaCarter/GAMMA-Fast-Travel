@@ -43,6 +43,8 @@ function dft_clear()
     dft.is_traveling = false
     dft_set_fft_trip_in_progress(false)
     dft.ambush_pending = false
+    dft.ambush_stop_ratio = nil
+    if dft_clear_ambush_range_circle then dft_clear_ambush_range_circle() end
     -- NOTE: target_stamina deliberately survives dft_clear() - it needs to keep holding
     -- through the post-arrival safety window (up to ~90s after the journey itself ends).
     -- It only resets at the start of the next journey (dft_start_travel_sequence).

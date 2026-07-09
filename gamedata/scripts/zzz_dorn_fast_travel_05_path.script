@@ -1976,6 +1976,122 @@ function dft_mark_dot_outcome(ratio, spot_name)
     end)
 end
 
+-- Revert any already-promoted dots past an ambush point back to grey (pending).
+function dft_freeze_dots_beyond_ratio(ratio)
+    local ambush_idx = dft_nearest_dot_index_for_ratio(ratio)
+    if not ambush_idx then return end
+    local d_count = dft.dot_count or 0
+    for i = ambush_idx + 1, d_count do
+        local obj_id = dft.dot_ids[i]
+        if obj_id and dft.dot_done[i] then
+            dft.dot_done[i] = false
+            pcall(function()
+                if level.map_has_object_spot(obj_id, dft_path.dot_spot) ~= 0 then
+                    level.map_remove_object_spot(obj_id, dft_path.dot_spot)
+                end
+                if level.map_has_object_spot(obj_id, dft_path.dot_spot_pending) == 0 then
+                    level.map_add_object_spot_ser(obj_id, dft_path.dot_spot_pending, "")
+                end
+            end)
+        end
+    end
+end
+
+function dft_clear_ambush_range_circle()
+    local ids = dft.ambush_range_ids
+    if not (ids and #ids > 0) then
+        dft.ambush_range_ids = {}
+        dft.ambush_range_last = nil
+        return
+    end
+    local spot = dft_path.ambush_range_spot or "dft_ambush_range_ring"
+    for i = 1, #ids do
+        local id = ids[i]
+        pcall(function()
+            if level.map_has_object_spot(id, spot) ~= 0 then
+                level.map_remove_object_spot(id, spot)
+            end
+        end)
+        local obj = alife_object(id)
+        if obj then pcall(alife_release, obj) end
+    end
+    dft.ambush_range_ids = {}
+    dft.ambush_range_last = nil
+end
+
+function dft_update_ambush_range_circle(center_pos, radius_m)
+    if not (center_pos and radius_m and radius_m > 0 and db.actor) then
+        dft_clear_ambush_range_circle()
+        return
+    end
+    local segments = dft_path.ambush_range_segments or 32
+    local spot = dft_path.ambush_range_spot or "dft_ambush_range_ring"
+    local offset = dft_path.dot_underground_offset_m or 100
+    local lvid = db.actor:level_vertex_id()
+    local gvid = db.actor:game_vertex_id()
+    dft_clear_ambush_range_circle()
+    dft.ambush_range_ids = {}
+    for i = 0, segments - 1 do
+        local angle = (2 * math.pi * i) / segments
+        local pos = vector():set(
+            center_pos.x + math.cos(angle) * radius_m,
+            center_pos.y,
+            center_pos.z + math.sin(angle) * radius_m
+        )
+        local buried = vector():set(pos.x, pos.y - offset, pos.z)
+        local se = alife_create("device_pda", buried, lvid, gvid)
+        if se then
+            dft.ambush_range_ids[#dft.ambush_range_ids + 1] = se.id
+            pcall(level.map_add_object_spot_ser, se.id, spot, "")
+            dft_freeze_buried_dot(se.id)
+        end
+    end
+    dft.ambush_range_last = {
+        radius = radius_m,
+        cx = center_pos.x,
+        cz = center_pos.z,
+    }
+end
+
+function dft_sync_ambush_range_circle()
+    local cfg = _G.dft_config
+    if not (cfg and cfg.show_ambush_range) then
+        if dft.ambush_range_ids and #dft.ambush_range_ids > 0 then
+            dft_clear_ambush_range_circle()
+        end
+        return
+    end
+    local pda_shown = false
+    pcall(function()
+        if ActorMenu and ActorMenu.get_pda_menu then
+            local pda = ActorMenu.get_pda_menu()
+            if pda and pda:IsShown() then pda_shown = true end
+        end
+    end)
+    if not pda_shown then
+        if dft.ambush_range_ids and #dft.ambush_range_ids > 0 then
+            dft_clear_ambush_range_circle()
+        end
+        return
+    end
+    if not (db.actor and db.actor:alive()) then return end
+
+    local sneaky = dft.is_traveling and dft.travel_mode == "sneaky"
+    local radius = dft_ambush_radius_m(sneaky)
+    local center = db.actor:position()
+    if dft.is_traveling and dft.travel_dist and dft.travel_dist > 0 then
+        local ratio = math.min((dft.current_dist or 0) / dft.travel_dist, 1.0)
+        local vpos = dft_get_safe_lvid_pos(ratio)
+        if vpos then center = vpos end
+    end
+
+    local last = dft.ambush_range_last
+    if last and last.radius == radius and last.cx == center.x and last.cz == center.z then
+        return
+    end
+    dft_update_ambush_range_circle(center, radius)
+end
+
 dft_path_preview_enabled = function()
     local cfg = _G.dft_config
     return cfg and cfg.path_preview == true
@@ -2102,6 +2218,10 @@ do
     _G.dft_ensure_path_dot = dft_ensure_path_dot
     _G.dft_promote_path_dot = dft_promote_path_dot
     _G.dft_mark_dot_outcome = dft_mark_dot_outcome
+    _G.dft_freeze_dots_beyond_ratio = dft_freeze_dots_beyond_ratio
+    _G.dft_clear_ambush_range_circle = dft_clear_ambush_range_circle
+    _G.dft_update_ambush_range_circle = dft_update_ambush_range_circle
+    _G.dft_sync_ambush_range_circle = dft_sync_ambush_range_circle
     _G.dft_preview_eligible = dft_preview_eligible
     _G.dft_ensure_level_graph_cache = dft_ensure_level_graph_cache
     _G.dft_graph_nearest_gvid = dft_graph_nearest_gvid

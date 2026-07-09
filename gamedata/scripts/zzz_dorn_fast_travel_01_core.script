@@ -38,6 +38,9 @@ local dft_defaults = {
     pending_dot_cleanup = nil, -- dot object IDs snapshotted at save time, released after load
     pda_check_from      = nil, -- time_global() ms; PDA-closed checks are ignored before this
     ambush_pending      = false, -- true during the brief delay between ambush detection and the actual teleport
+    ambush_stop_ratio   = nil,   -- path ratio where a mid-journey ambush froze dot promotion
+    ambush_range_ids    = {},    -- buried device_pda ids forming the PDA ambush-range ring
+    ambush_range_last   = nil,   -- {radius,cx,cz} cache to avoid rebuilding the ring every tick
     target_stamina      = 1.0, -- end-of-travel stamina the post-arrival safety window should hold at
     path_preview_id     = nil,
     is_path_preview     = false,
@@ -250,6 +253,8 @@ _G.dft_path = {
     dot_underground_offset_m = 100, -- bury the carrier device_pda this far below its dot's
                                      -- real y so it's never visible/reachable in the 3D world -
                                      -- map spots only care about x/z, so this doesn't affect them.
+    ambush_range_segments = 32,  -- ring markers approximating ambush radius on the PDA map
+    ambush_range_spot     = "dft_ambush_range_ring",
     road_on_graph_max_m   = 5,   -- navmesh counts as on-road when this close to a graph node
     preview_edge_spacing_m = 5,
     lc_snap_max_drift_m   = 25,  -- max navmesh snap distance from level changer

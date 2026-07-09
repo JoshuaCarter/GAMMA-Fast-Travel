@@ -27,6 +27,13 @@ function on_mcm_load()
 						def = true,
 						hint = "dorn_fast_travel_block_transition_in_combat",
 					},
+					{
+						id = "show_ambush_range",
+						type = "check",
+						val = 1,
+						def = false,
+						hint = "dorn_fast_travel_show_ambush_range",
+					},
 				},
 			},
 			{

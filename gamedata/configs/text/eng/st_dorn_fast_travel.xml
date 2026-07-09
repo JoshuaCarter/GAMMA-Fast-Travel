@@ -39,7 +39,7 @@
 		<text>Destination is too close.</text>
 	</string>
 	<string id="dft_msg_hostiles_nearby">
-		<text>Hostiles are too close - deal with them before traveling.</text>
+		<text>Hostiles within %dm ambush range - deal with them before traveling.</text>
 	</string>
 	<string id="dft_msg_emission_active">
 		<text>Cannot travel during an emission.</text>

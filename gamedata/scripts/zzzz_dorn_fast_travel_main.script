@@ -43,6 +43,7 @@ local get_config_defaults = {
     debug_log        = false,
     path_preview     = false,
     block_transition_in_combat = true,
+    show_ambush_range        = false,
 }
 
 get_config = function(key)
@@ -59,6 +60,11 @@ local function load_config()
     dft_config.path_preview = (pp == true or pp == 1)
     local btic = get_config("block_transition_in_combat")
     dft_config.block_transition_in_combat = not (btic == false or btic == 0)
+    local sar = get_config("show_ambush_range")
+    dft_config.show_ambush_range = (sar == true or sar == 1)
+    if not dft_config.show_ambush_range and dft_clear_ambush_range_circle then
+        dft_clear_ambush_range_circle()
+    end
     local dft_dorn = _G.dft and _G.dft.dorn
     dft_config.sneaking_level_up = dft_dorn and dft_dorn.mcm
         and dft_dorn.mcm.key(MOD_ID, MCM_SECTION_DEV .. "/sneaking_level_up", nil)

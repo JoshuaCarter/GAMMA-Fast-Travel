@@ -17,6 +17,12 @@
 	<string id="ui_mcm_dorn_fast_travel_block_transition_in_combat_desc">
 		<text>Prevents crossing a level transition (on foot or via fast travel) while an alerted enemy is actively engaging you within ambush range. On by default.</text>
 	</string>
+	<string id="ui_mcm_dorn_fast_travel_show_ambush_range">
+		<text>Show Ambush Range on PDA Map</text>
+	</string>
+	<string id="ui_mcm_dorn_fast_travel_show_ambush_range_desc">
+		<text>Draw a yellow circle on the PDA map for your current ambush detection radius (time, weather, and travel mode). Off by default.</text>
+	</string>
 	<string id="ui_mcm_dorn_fast_travel_development_section">
 		<text>Development</text>
 	</string>
