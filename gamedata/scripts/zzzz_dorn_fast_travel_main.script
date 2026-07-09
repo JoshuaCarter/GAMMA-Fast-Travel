@@ -389,10 +389,6 @@ dft_strip_own_menu_items = function(pui)
     end)
 end
 
-local function dft_lc_skip_silent_error(reason)
-    return reason == "lc_wrong_level" or reason == "invalid_id" or reason == "no_object"
-end
-
 dft_add_cannot_travel_item = function(pui, id, reason)
     pui:AddItem(dft_str("dft_msg_cannot_travel_here"))
     dft_log("menu: cannot travel id=%s reason=%s", tostring(id), tostring(reason or "unknown"))
@@ -516,7 +512,7 @@ on_map_spot_menu_add_property_impl = function(pui, id, ln, hint)
     if is_lc then
         local target, terr = dft_resolve_travel_target(id, ln, click_pos)
         if not target then
-            if dft_lc_skip_silent_error(terr) then
+            if terr == "lc_wrong_level" or terr == "invalid_id" or terr == "no_object" then
                 dft_log("menu: skip lc id=%s (%s, off-level or unavailable)", tostring(id), tostring(terr))
                 dft_clear_path_preview()
                 return false

@@ -1,4 +1,4 @@
-# Dorn's Fast Travel
+# Dorn's Fast Travel v0.0.0
 
 Adds free PDA simulated fast travel journeys though the zone using real pathing and enemy ambushes. Designed to feel like a natural fit in **S.T.A.L.K.E.R. G.A.M.M.A.**. Also adds a new Sneaking skill that lets you get better at avoiding ambushes and more. See the PDA guide for more details: **PDA > Guide > Addons > Dorn's Fast Travel**
 
@@ -22,5 +22,17 @@ Credit to *damage_zedd* and his **[The Long Road Ahead](https://discord.com/chan
 
 ## Installation
 
-1. Download the latest release from [GAMMA-Fast-Travel](https://github.com/JoshuaCarter/GAMMA-Fast-Travel/releases)
+1. Download the latest release from https://github.com/JoshuaCarter/GAMMA-Fast-Travel/releases
 2. Install via MO2 like normal
+
+## Other mods
+
+- https://github.com/JoshuaCarter/GAMMA-Dont-ReEquip-PDA
+- https://github.com/JoshuaCarter/GAMMA-Faster-Skinning
+- https://github.com/JoshuaCarter/GAMMA-Field-Strip-All-Keybind
+- https://github.com/JoshuaCarter/GAMMA-FPS-Counter
+- https://github.com/JoshuaCarter/GAMMA-Giant-Jump
+- https://github.com/JoshuaCarter/GAMMA-Optimal-Tool-Use
+- https://github.com/JoshuaCarter/GAMMA-Prone-Fix
+- https://github.com/JoshuaCarter/GAMMA-Radiation-Grain-Fix
+- https://github.com/JoshuaCarter/GAMMA-Tooltip-Weapon-Damage
