@@ -95,25 +95,9 @@ refresh_active_config = function()
     return dft.active_config
 end
 
--- Any damage that would actually lower health during travel ends the journey - no need to
--- guess at which hit types "count", the player can see what happened and figure out why.
+-- Damage cancel during travel is handled in dft_actor_on_update (health snapshot vs 1% threshold).
+-- Post-teleport invuln is handled by dft_is_safety_active() below.
 actor_on_before_hit = function(shit, bone_id)
-    if dft.is_traveling then
-        -- The ambush outcome is already locked in once the dot/sound reveal fires (the brief
-        -- delay before dft_trigger_encounter actually teleports) - don't let a stray hit in
-        -- that window cancel the journey as a way to dodge the ambush that's already coming.
-        if dft.ambush_pending then
-            shit.power = 0
-            return
-        end
-        if (shit.power or 0) > 0 then
-            dft_log("Journey interrupted by incoming damage (type=%s power=%.2f).",
-                tostring(shit.type), shit.power or 0)
-            dft_abort_journey("damage")
-        end
-        return
-    end
-
     if dft_is_safety_active() then
         dft_log("Damage blocked by travel safety. Original power: %f, type: %d", shit.power, shit.type)
         shit.power = 0

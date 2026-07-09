@@ -162,6 +162,7 @@ function dft_start_travel_sequence(pos, lvid, gvid, is_transition, final_gvid)
     dft.arrival_forced_ambushes = 0
     dft.arrival_short_m = 0
     dft.target_stamina = 1.0
+    dft.journey_start_health = db.actor.health
     dft_log("Trip start | %.0fm | sneak %d%%", dft.travel_dist, dft_calc_sneak_chance(dft.travel_mode == "sneaky"))
     dft.expected_duration = dft_game_minutes_for_dist(dft.travel_dist, dft.travel_mode == "sneaky", dft.encumbrance_time_mult)
     dft_plan_emission_interrupt()
@@ -657,6 +658,19 @@ function dft_actor_on_update()
     local dt = (tg - dft.last_update_tg) / 1000
     dft.last_update_tg = tg
     dft.next_update    = tg + 100
+
+    if dft.journey_start_health then
+        local loss = dft.journey_start_health - db.actor.health
+        if loss > 0 then
+            local min_loss = (_G.dft_travel and _G.dft_travel.damage_cancel_min_loss) or 0.01
+            if loss >= min_loss then
+                dft_log("Journey interrupted: %.1f%% HP lost since travel start (%.3f -> %.3f).",
+                    loss * 100, dft.journey_start_health, db.actor.health)
+                dft_abort_journey("damage")
+                return
+            end
+        end
+    end
 
     if (not dft.pda_check_from or tg >= dft.pda_check_from) and not dft_is_pda_map_shown() then
         dft_log("Journey cancelled - PDA closed.")

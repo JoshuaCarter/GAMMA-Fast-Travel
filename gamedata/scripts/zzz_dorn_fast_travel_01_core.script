@@ -41,6 +41,7 @@ local dft_defaults = {
     ambush_stop_ratio   = nil,   -- path ratio where a mid-journey ambush froze dot promotion
     ambush_range_ids    = {},    -- buried device_pda ids forming the PDA ambush-range ring
     ambush_range_last   = nil,   -- {radius,cx,cz} cache to avoid rebuilding the ring every tick
+    journey_start_health = nil, -- actor.health snapshot at journey start; damage cancel compares against this
     target_stamina      = 1.0, -- end-of-travel stamina the post-arrival safety window should hold at
     path_preview_id     = nil,
     is_path_preview     = false,
@@ -105,6 +106,7 @@ _G.dft_travel = {
     encumbrance_red_stamina    = 0.10, -- end-of-travel stamina when arriving over max carry weight
     ambush_stamina_normal      = 0.50, -- end-of-travel stamina when ambushed in normal (non-sneak) mode
     ambush_stamina_sneaky      = 1.00, -- end-of-travel stamina when ambushed while sneaking
+    damage_cancel_min_loss     = 0.01, -- cancel journey only after this much HP lost (1% of max; health is 0-1)
 }
 
 -- Guide fee scales with how dangerous the origin/destination levels are on average (1.0 safest

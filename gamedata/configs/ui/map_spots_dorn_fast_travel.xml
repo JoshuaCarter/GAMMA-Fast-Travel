@@ -1,5 +1,5 @@
 <!-- Dorn's Fast Travel: path dots on the PDA map (grey = ahead, green = passed,
-     blue = dodged a threat here, red = ambushed here) -->
+     blue = dodged a threat here, red = ambushed here; ambush also shows green_location pin) -->
 <dft_path_dot>
 	<level_map spot="dft_path_dot_spot"/>
 </dft_path_dot>

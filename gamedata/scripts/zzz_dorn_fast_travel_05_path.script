@@ -702,15 +702,39 @@ function dft_wake_ambush_squad_online(squad_id)
     end)
 end
 
--- Minimal actor wound to torso; same pattern as xr_effects hit_npc_from_actor / bar_arena_hit.
+-- Force ambush hostiles to treat the actor as their combat target (not just a stray wound).
+-- Mirrors tasks_skyfall / xr_combat_ignore hit-by-actor handling so best_enemy() stays on us
+-- even when other NPCs are visible or the ping came from off-screen.
 function dft_ping_ambush_npc(npc_id, actor)
     local npc = level.object_by_id(npc_id)
     if not (npc and npc:alive() and actor) then return false end
     local name = "?"
+    local aid = actor:id()
     pcall(function()
         name = npc:name()
         if save_var then
             save_var(npc, "xr_combat_ignore_enabled", false)
+        end
+        local st = db.storage and db.storage[npc_id]
+        if st then
+            st.hitted_by = aid
+            st.enemy_id = aid
+            if st.combat then
+                if st.combat.set_enemy then
+                    st.combat:set_enemy(actor)
+                else
+                    st.combat.enemy_id = aid
+                end
+            end
+        end
+        if game_object and game_object.enemy and npc.set_relation then
+            npc:set_relation(game_object.enemy, actor)
+        end
+        if npc.set_enemy then
+            npc:set_enemy(actor)
+        end
+        if xr_combat_ignore and xr_combat_ignore.fighting_with_actor_npcs then
+            xr_combat_ignore.fighting_with_actor_npcs[npc_id] = true
         end
         local h = hit()
         h.draftsman = actor
@@ -723,7 +747,7 @@ function dft_ping_ambush_npc(npc_id, actor)
         h.power = power
         h.impulse = 0
         npc:hit(h)
-        dft_log("  npc id=%s %s pinged (torso wound, power=%.3f).", tostring(npc_id), name, power)
+        dft_log("  npc id=%s %s ambush-aggro (ping power=%.3f).", tostring(npc_id), name, power)
     end)
     return true
 end
@@ -740,13 +764,14 @@ function dft_ping_ambush_squad(squad_id, actor)
     return n
 end
 
-function dft_alert_ambushers(targets)
+function dft_alert_ambushers(targets, opts)
     if not (targets and db.actor) then return end
+    opts = opts or {}
     local actor = db.actor
     local squad_done = {}
     local npc_done = {}
     local squads_online = 0
-    local npcs_pinged = 0
+    local npcs_aggro = 0
 
     local function wake_squad(sid)
         if squad_done[sid] then return end
@@ -756,7 +781,15 @@ function dft_alert_ambushers(targets)
             dft_wake_ambush_squad_online(sid)
             squads_online = squads_online + 1
         end
-        npcs_pinged = npcs_pinged + dft_ping_ambush_squad(sid, actor)
+        if squad and squad.squad_members and save_var then
+            for k in squad:squad_members() do
+                local member = level.object_by_id(k.id)
+                if member then
+                    save_var(member, "xr_combat_ignore_enabled", false)
+                end
+            end
+        end
+        npcs_aggro = npcs_aggro + dft_ping_ambush_squad(sid, actor)
         if squad and squad.squad_members then
             for k in squad:squad_members() do
                 npc_done[k.id] = true
@@ -775,14 +808,28 @@ function dft_alert_ambushers(targets)
         end
         if not npc_done[nid] then
             if dft_ping_ambush_npc(nid, actor) then
-                npcs_pinged = npcs_pinged + 1
+                npcs_aggro = npcs_aggro + 1
             end
             npc_done[nid] = true
         end
     end
 
-    dft_log("Ambush wake: %d squads brought online, %d NPCs pinged (no range limit).",
-        squads_online, npcs_pinged)
+    dft_log("Ambush aggro: %d squads brought online, %d NPCs targeted at actor.",
+        squads_online, npcs_aggro)
+
+    -- Squads may still be spawning in after switch_online; the post-teleport time jump can
+    -- also reshuffle best_enemy() toward other visible hostiles - reassert a few times.
+    if not opts.no_retry then
+        local snap = { squads = {}, npcs = {} }
+        for i = 1, #(targets.squads or {}) do snap.squads[i] = targets.squads[i] end
+        for i = 1, #(targets.npcs or {}) do snap.npcs[i] = targets.npcs[i] end
+        for _, delay in ipairs({ 0.3, 1.0 }) do
+            CreateTimeEvent("dft", "ambush_aggro_" .. tostring(delay), delay, function()
+                dft_alert_ambushers(snap, { no_retry = true })
+                return true
+            end)
+        end
+    end
 end
 
 function dft_resolve_arrival_position()
@@ -1973,6 +2020,11 @@ function dft_mark_dot_outcome(ratio, spot_name)
             end
         end
         level.map_add_object_spot_ser(obj_id, spot_name, "")
+        -- TLRA-style green PDA pin at the ambush point (same buried carrier as the red dot).
+        if spot_name == dft_path.dot_spot_ambush
+                and level.map_has_object_spot(obj_id, "green_location") == 0 then
+            level.map_add_object_spot_ser(obj_id, "green_location", "")
+        end
     end)
 end
 
