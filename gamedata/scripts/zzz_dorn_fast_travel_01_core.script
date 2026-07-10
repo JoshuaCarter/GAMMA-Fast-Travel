@@ -238,8 +238,12 @@ _G.dft_arrival = {
 -- for the "is anyone alerted nearby" range so it's already forgiving at night/in bad weather,
 -- same as every other ambush check in this mod.
 _G.dft_transition_guard = {
+    buffer_m              = 12, -- how close to a door counts as "near it" for the on-screen warning
+    search_pad_m          = 15, -- extra search radius added on top of buffer_m when locating that door
+    scan_interval_ms      = 150,
+    msg_cooldown_s        = 5,
     zone_scan_interval_ms = 100, -- how often to re-test exit-zone membership
-    countdown_duration_s  = 5,   -- full timer value; crossings unlock only at 0
+    countdown_duration_s  = 3,   -- full timer value; crossings unlock only at 0
     trigger_radius_m      = 10,  -- radius around an exit that counts as "in zone"
 }
 

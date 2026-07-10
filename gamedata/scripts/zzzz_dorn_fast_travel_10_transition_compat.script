@@ -34,9 +34,6 @@ local function try_auto_transition_travel()
         if sec and _G.lc_extra_transitions.lc_pool[sec] then
             dft._transition_auto_trip = door_id
             gate_log("auto-travel lc_extra door=%s sec=%s", tostring(door_id), tostring(sec))
-            if dft_on_transition_prepare_load then
-                dft_on_transition_prepare_load()
-            end
             _G.lc_extra_transitions.teleport_actor(db.actor, obj)
             return
         end
@@ -44,9 +41,6 @@ local function try_auto_transition_travel()
 end
 
 local function on_before_level_changing()
-    if dft_on_transition_prepare_load then
-        dft_on_transition_prepare_load()
-    end
     if not dft_trans_log then return end
     local remaining = (dft and dft._transition_remaining_ms or 0) / 1000
     dft_trans_log("on_before_level_changing remaining=%.1fs allowed=%s inside=%s door=%s",

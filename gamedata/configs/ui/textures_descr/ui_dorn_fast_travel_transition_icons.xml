@@ -1,0 +1,10 @@
+<w>
+	<!-- Transition HUD + PDA ambush icon (user-specified ui_common crop). -->
+	<file name="ui\ui_common">
+		<texture id="dft_trans_icon_combat" x="596" y="975" width="17" height="17" />
+		<texture id="ui_dorn_path_icon_ambush" x="596" y="975" width="17" height="17" />
+	</file>
+	<file name="ui\ui_wheel_ammo">
+		<texture id="dft_trans_icon_exit" x="110" y="720" width="80" height="80" />
+	</file>
+</w>

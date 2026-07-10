@@ -419,7 +419,8 @@ end
 
 -- Positions of every transition trigger (native level changer or scripted sr_level_changer
 -- restrictor) leading out of the current level, from the door registry already built by
--- dft_build_dynamic_map (02_zones). Cached per level for nearest-door lookups.
+-- dft_build_dynamic_map (02_zones). Cached per level so dft_enforce_transition_combat_lock
+-- (08_travel) can poll it every tick cheaply.
 local function rebuild_door_position_cache(lvl_name)
     local cache = {}
     local id_cache = {}
