@@ -11,11 +11,12 @@ local dft = _G.dft
 local guard = _G.dft_transition_guard or {}
 local DFT_TRANS_HUD_XML = "ui_dorn_fast_travel_transition.xml"
 local active_hud = nil
-
-local DFT_TRANS_ICON = {
-    combat = "dft_trans_icon_combat",
-    exit   = "dft_trans_icon_exit",
-}
+local PP_LOAD_ID = 22301 -- shared with travel fade (08_travel)
+local HUD_BOX_X = 462
+local HUD_BOX_Y = 738
+local HUD_BOX_W = 100
+local HUD_BOX_H = 30
+local TEXT_CENTER = 2
 
 local function trans_log(fmt, ...)
     local ok, msg = pcall(string.format, fmt, ...)
@@ -40,7 +41,7 @@ local function log_throttled()
     dft._transition_log_next = tg + 2000
     local stats = dft._transition_lock_stats or {}
     trans_log(
-        "state inside=%s door={%s} remaining=%.1fs dir=%s allowed=%s traveling=%s lock=%s stats(total=%d online=%d applied=%d noop=%d offline=%d)",
+        "state inside=%s door={%s} remaining=%.1fs dir=%s allowed=%s traveling=%s lock=%s quarantine=%s stats(total=%d online=%d applied=%d noop=%d offline=%d)",
         tostring(dft._transition_zone_inside),
         log_door_info(dft._transition_zone_door_id),
         (dft._transition_remaining_ms or 0) / 1000,
@@ -48,6 +49,7 @@ local function log_throttled()
         tostring(transition_allowed()),
         tostring(dft.is_traveling),
         tostring(dft._transition_locked),
+        tostring(dft._transition_arrival_quarantine),
         stats.total or 0, stats.online or 0, stats.applied or 0, stats.noop or 0, stats.offline or 0)
 end
 
@@ -85,19 +87,15 @@ local function dest_from_door_id(door_id)
     return format_transition_dest_label(dft_read_transition_dest_info(alife_object(door_id)))
 end
 
-local function combat_now()
+local function combat_blocks()
+    local cfg = _G.dft_config
+    if cfg and cfg.block_transition_in_combat == false then return false end
     if not (db.actor and db.actor:alive()) then return false end
     return dft_alerted_enemy_within(db.actor:position(), dft_ambush_radius_m(false))
 end
 
-local function combat_blocks()
-    local cfg = _G.dft_config
-    if cfg and cfg.block_transition_in_combat == false then return false end
-    return combat_now()
-end
-
 local function duration_ms()
-    return (guard.countdown_duration_s or 3) * 1000
+    return (guard.countdown_duration_s or 5) * 1000
 end
 
 local function transition_allowed()
@@ -108,12 +106,37 @@ local function transition_allowed()
     return remaining <= 0 and not combat_blocks()
 end
 
-local function actor_inside_zone()
+local function raw_in_transition_zone()
     if not (db.actor and db.actor:alive()) then return false, nil end
     local trigger_r = guard.trigger_radius_m or 10
     local door_id, dist = dft_nearest_transition_door_id(db.actor:position(), trigger_r)
     if not (door_id and dist and dist <= trigger_r) then return false, nil end
     return true, door_id
+end
+
+local function try_init_arrival_quarantine()
+    if not (db.actor and db.actor:alive()) then return false end
+    dft.door_pos_cache_level = nil
+    local inside, door_id = raw_in_transition_zone()
+    if not inside then return false end
+    if not dft._transition_arrival_quarantine then
+        trans_log("arrival quarantine - spawned in transition zone door={%s}", log_door_info(door_id))
+    end
+    dft._transition_arrival_quarantine = true
+    dft._transition_force_zone_scan = true
+    return true
+end
+
+local function actor_inside_zone()
+    local inside, door_id = raw_in_transition_zone()
+    if dft._transition_arrival_quarantine then
+        if not inside then
+            dft._transition_arrival_quarantine = nil
+            trans_log("arrival quarantine cleared (left transition zone)")
+        end
+        return false, nil
+    end
+    return inside, door_id
 end
 
 local function sync_lock(allowed)
@@ -132,6 +155,19 @@ local function hud_teardown()
         active_hud:Teardown()
         active_hud = nil
     end
+end
+
+local function clear_load_black()
+    pcall(function() level.remove_pp_effector(PP_LOAD_ID) end)
+end
+
+local function prepare_transition_load()
+    dft._transition_hud_load_suppressed = true
+    hud_teardown()
+    pcall(function()
+        level.add_pp_effector("dorn_ft_fade.ppe", PP_LOAD_ID, false)
+        level.set_pp_effector_factor(PP_LOAD_ID, 1.0)
+    end)
 end
 
 local function hud_ensure()
@@ -162,6 +198,8 @@ end
 
 local function on_level_changing()
     trans_log("on_level_changing reset timer")
+    dft._transition_hud_load_suppressed = true
+    dft._transition_arrival_quarantine = nil
     dft._transition_remaining_ms = duration_ms()
     dft._transition_dest_label = nil
     dft._transition_last_logic_tick = nil
@@ -203,7 +241,7 @@ local function tick_transition_countdown()
         if device():is_paused() then dt = 0 end
 
         local inside = dft._transition_zone_inside
-        local combat = combat_now()
+        local combat = combat_blocks()
 
         log_state_change("inside", inside)
         if inside ~= dft._transition_log_last_inside then
@@ -238,10 +276,11 @@ local function tick_transition_countdown()
             dft._transition_auto_trip = nil
         end
 
-        local show_hud = inside or (dft._transition_remaining_ms < dur_ms)
+        local show_hud = not dft._transition_hud_load_suppressed
+            and (inside or (dft._transition_remaining_ms or dur_ms) < dur_ms)
         if show_hud then
             hud_ensure()
-            if active_hud then active_hud:Refresh(combat_blocks()) end
+            if active_hud then active_hud:Refresh() end
             log_throttled()
         else
             hud_teardown()
@@ -254,53 +293,45 @@ end
 local function hud_apply_bg(bg, mode)
     if not bg then return end
 
-    bg:SetWndPos(vector2():set(512 - 100, 768 - 30 - 10))
-    bg:SetWndSize(vector2():set(200, 30))
+    bg:SetWndPos(vector2():set(HUD_BOX_X, HUD_BOX_Y))
+    bg:SetWndSize(vector2():set(HUD_BOX_W, HUD_BOX_H))
     bg:InitTexture("ui_inGame2_white_rect")
     bg:SetStretchTexture(true)
     bg:Show(true)
 
     if mode == "down" then
-        bg:SetTextureColor(GetARGB(128, 30, 110, 50))
+        bg:SetTextureColor(GetARGB(150, 30, 110, 50))
     elseif mode == "up" then
-        bg:SetTextureColor(GetARGB(128, 140, 80, 25))
+        bg:SetTextureColor(GetARGB(150, 128, 128, 128))
     elseif mode == "combat" then
-        bg:SetTextureColor(GetARGB(128, 160, 40, 40))
+        bg:SetTextureColor(GetARGB(150, 160, 40, 40))
     end
 end
 
-local function hud_apply_icon(icon, combat)
-    if not icon then return end
+local function hud_apply_dest(dest_label)
+    if not dest_label then return end
 
-    icon:SetWndPos(vector2():set(512 - 100 + 6, 768 - 30 - 10 + 6))
-    icon:SetWndSize(vector2():set(26, 26))
-    local tex = combat and DFT_TRANS_ICON.combat or DFT_TRANS_ICON.exit
-    if icon._dft_tex ~= tex then
-        icon:InitTexture(tex)
-        icon:SetStretchTexture(true)
-        icon._dft_tex = tex
-    end
-    icon:SetTextureColor(GetARGB(255, 255, 255, 255))
-    icon:Show(true)
+    dest_label:SetWndPos(vector2():set(HUD_BOX_X, HUD_BOX_Y))
+    dest_label:SetWndSize(vector2():set(HUD_BOX_W, 15))
+    pcall(function() dest_label:SetTextComplexMode(false) end)
+    pcall(function() dest_label:SetTextAlignment(TEXT_CENTER) end)
+    dest_label:SetTextColor(GetARGB(255, 190, 190, 190))
+    dest_label:SetText(dft._transition_dest_label or "?")
+    dest_label:Show(true)
 end
 
-local function hud_apply_text(label, combat)
-    if not label then return end
+local function hud_apply_countdown(countdown_label)
+    if not countdown_label then return end
 
-    label:SetWndPos(vector2():set(512 - 100 + 40, 768 - 30 - 10 + 6))
-    label:SetWndSize(vector2():set(150, 24))
-    pcall(function() label:SetTextComplexMode(false) end)
-    label:SetTextColor(GetARGB(255, 190, 190, 190))
-    if combat then
-        label:SetText(dft_str("dft_hud_transition_combat_blocked"))
-    else
-        local remaining = (dft._transition_remaining_ms or 0) / 1000
-        if remaining < 0 then remaining = 0 end
-        local prefix = string.format(dft_str("dft_hud_transition_countdown_prefix"),
-            dft._transition_dest_label or "?")
-        label:SetText(prefix .. " " .. string.format("%.1f", remaining))
-    end
-    label:Show(true)
+    countdown_label:SetWndPos(vector2():set(HUD_BOX_X, HUD_BOX_Y + 15))
+    countdown_label:SetWndSize(vector2():set(HUD_BOX_W, 15))
+    pcall(function() countdown_label:SetTextComplexMode(false) end)
+    pcall(function() countdown_label:SetTextAlignment(TEXT_CENTER) end)
+    countdown_label:SetTextColor(GetARGB(255, 190, 190, 190))
+    local remaining = (dft._transition_remaining_ms or 0) / 1000
+    if remaining < 0 then remaining = 0 end
+    countdown_label:SetText(string.format("%.1f", remaining))
+    countdown_label:Show(true)
 end
 
 class "dft_transition_hud_wnd" (CUIScriptWnd)
@@ -316,11 +347,11 @@ function dft_transition_hud_wnd:Begin()
     local xml = CScriptXmlInit()
     xml:ParseFile(DFT_TRANS_HUD_XML)
     self.bg = xml:InitStatic("background", self)
-    self.icon = xml:InitStatic("icon", self)
-    self.label = xml:InitTextWnd("label", self)
+    self.dest_label = xml:InitTextWnd("dest_label", self)
+    self.countdown_label = xml:InitTextWnd("countdown_label", self)
     hud_apply_bg(self.bg, "down")
-    hud_apply_icon(self.icon, false)
-    hud_apply_text(self.label, false)
+    hud_apply_dest(self.dest_label)
+    hud_apply_countdown(self.countdown_label)
 
     local hud = get_hud()
     if not hud then
@@ -331,25 +362,25 @@ function dft_transition_hud_wnd:Begin()
     self._hud = true
     self:Show(true)
     RegisterScriptCallback("actor_on_net_destroy", self)
-    self:Refresh(combat_blocks())
+    self:Refresh()
 end
 
-function dft_transition_hud_wnd:Refresh(combat)
+function dft_transition_hud_wnd:Refresh()
     local mode = "down"
-    if combat then
+    if combat_blocks() then
         mode = "combat"
     elseif dft._transition_timer_dir == 1 then
         mode = "up"
     end
 
     hud_apply_bg(self.bg, mode)
-    hud_apply_icon(self.icon, combat)
-    hud_apply_text(self.label, combat)
+    hud_apply_dest(self.dest_label)
+    hud_apply_countdown(self.countdown_label)
 end
 
 function dft_transition_hud_wnd:Update()
     CUIScriptWnd.Update(self)
-    self:Refresh(combat_blocks())
+    self:Refresh()
 end
 
 function dft_transition_hud_wnd:actor_on_net_destroy()
@@ -366,12 +397,26 @@ function dft_transition_hud_wnd:Teardown()
     if active_hud == self then active_hud = nil end
 end
 
+local function on_transition_post_load()
+    dft._transition_hud_load_suppressed = nil
+    clear_load_black()
+    if not try_init_arrival_quarantine() then
+        CreateTimeEvent("dft", "quarantine_recheck", 1.0, function()
+            try_init_arrival_quarantine()
+            return true
+        end)
+    end
+end
+
 do
     _G.dft_format_transition_dest_label = format_transition_dest_label
     _G.dft_transition_allowed = transition_allowed
     _G.dft_trans_log = trans_log
     _G.dft_init_transition_lock = init_transition_lock
     _G.dft_on_level_changing = on_level_changing
+    _G.dft_on_transition_prepare_load = prepare_transition_load
+    _G.dft_on_transition_post_load = on_transition_post_load
+    _G.dft_try_init_arrival_quarantine = try_init_arrival_quarantine
     _G.dft_stop_transition_countdown = stop_transition_countdown
     _G.dft_tick_transition_countdown = tick_transition_countdown
 end

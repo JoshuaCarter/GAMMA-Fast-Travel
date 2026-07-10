@@ -233,6 +233,9 @@ end
 
 on_loading_screen_dismissed = function()
     dft.player_ready = true
+    if dft_on_transition_post_load then
+        dft_on_transition_post_load()
+    end
 end
 
 actor_on_first_update = function()
@@ -244,6 +247,9 @@ actor_on_first_update = function()
     dft._sneak_cd_label = nil
 
     dft_build_dynamic_map()
+    if dft_try_init_arrival_quarantine then
+        dft_try_init_arrival_quarantine()
+    end
 
     -- Pre-build road graph cache so first path preview does not hitch the PDA menu.
     CreateTimeEvent("dft", "warm_graph_cache", 1.5, function()

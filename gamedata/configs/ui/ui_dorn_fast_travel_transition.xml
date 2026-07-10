@@ -4,8 +4,10 @@
 	<background x="0" y="0" width="1" height="1" stretch="1">
 		<texture>ui_inGame2_white_rect</texture>
 	</background>
-	<icon x="0" y="0" width="1" height="1" stretch="0"/>
-	<label x="0" y="0" width="1" height="1">
-		<text font="letterica18" align="l" r="190" g="190" b="190" a="255"/>
-	</label>
+	<dest_label x="0" y="0" width="1" height="1">
+		<text font="letterica16" align="c" r="190" g="190" b="190" a="255"/>
+	</dest_label>
+	<countdown_label x="0" y="0" width="1" height="1">
+		<text font="letterica16" align="c" r="190" g="190" b="190" a="255"/>
+	</countdown_label>
 </w>
