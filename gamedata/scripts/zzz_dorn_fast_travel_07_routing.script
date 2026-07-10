@@ -9,7 +9,7 @@ local dft = _G.dft
 
 -- Snap a level-changer object's position to a safe navmesh point near its anchor.
 -- Uses small local offsets only; rejects snaps that drift too far (wrong navmesh island).
-dft_snap_door_pos = function(obj, anchor_pos, max_drift_m)
+snap_door_pos = function(obj, anchor_pos, max_drift_m)
     if not obj then return nil end
     max_drift_m = max_drift_m or (_G.dft_path and _G.dft_path.lc_snap_max_drift_m) or 25
     anchor_pos = anchor_pos or obj.position
@@ -44,7 +44,7 @@ dft_snap_door_pos = function(obj, anchor_pos, max_drift_m)
     return nil
 end
 
-function dft_advance_travel_time(ratio, opts)
+local function advance_travel_time(ratio, opts)
     opts = opts or {}
     local allow_surge = opts.allow_surge == true
     if not (dft.start_game_time and dft.expected_duration and dft.expected_duration > 0) then
@@ -130,6 +130,6 @@ end
 
 -- dft_publish_to_global
 do
-    _G.dft_advance_travel_time = dft_advance_travel_time
-    _G.dft_snap_door_pos = dft_snap_door_pos
+    _G.dft_advance_travel_time = advance_travel_time
+    _G.dft_snap_door_pos = snap_door_pos
 end

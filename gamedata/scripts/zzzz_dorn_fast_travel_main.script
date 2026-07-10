@@ -9,15 +9,15 @@ local dft = _G.dft
 
 -- Forward declarations for this file's private (non-exported) helpers, so they can
 -- reference each other regardless of definition order below. refresh_active_config and
--- dft_abort_journey are the only two functions here any other DFT script calls, so they
+-- abort_journey are the only two functions here any other DFT script calls, so they
 -- alone stay bare globals (see the publish block at the end of this file). on_game_start
 -- is NOT in this list - X-Ray calls it directly per-file at boot (see
 -- dorn_common_f575cc9b.script's header comment), so it must stay a real bare top-level
 -- function, never a local, even though no other DFT script calls it by name.
 local mcm_option_path, get_config, actor_on_before_hit, on_option_change,
-    on_loading_screen_dismissed, actor_on_first_update, dft_menu_item_is_ours,
-    dft_strip_own_menu_items, dft_add_cannot_travel_item, dft_add_guide_menu_item,
-    dft_add_travel_menu_items, dft_on_map_right_click, on_map_spot_menu_add_property_impl,
+    on_loading_screen_dismissed, actor_on_first_update, menu_item_is_ours,
+    strip_own_menu_items, add_cannot_travel_item, add_guide_menu_item,
+    add_travel_menu_items, on_map_right_click, on_map_spot_menu_add_property_impl,
     on_map_spot_menu_add_property, on_map_spot_menu_property_clicked, on_key_press
 
 local MCM_SECTION_MAIN = "main"
@@ -109,7 +109,7 @@ on_option_change = function()
     load_config()
 end
 
-function dft_abort_journey(reason)
+local function abort_journey(reason)
     if not dft.is_traveling then return end
     if not (db.actor and db.actor:alive()) then return end
 
@@ -154,7 +154,7 @@ function on_game_start()
         dft_build_level_names_registry()
         dft.right_click_avail = (_G.COnRightClickMap ~= nil)
         if dft.right_click_avail then
-            RegisterScriptCallback("on_map_right_click", dft_on_map_right_click)
+            RegisterScriptCallback("on_map_right_click", on_map_right_click)
             dft_log("on_map_right_click registered (modded PDA map clicks).")
         end
         RegisterScriptCallback("actor_on_update",                dft_actor_on_update)
@@ -162,6 +162,12 @@ function on_game_start()
         RegisterScriptCallback("actor_on_before_hit",            actor_on_before_hit)
         RegisterScriptCallback("on_key_press",                   on_key_press)
         RegisterScriptCallback("on_loading_screen_dismissed",    on_loading_screen_dismissed)
+        if dft_on_level_changing then
+            RegisterScriptCallback("on_level_changing", dft_on_level_changing)
+        end
+        if dft_install_transition_gates then
+            dft_install_transition_gates()
+        end
         RegisterScriptCallback("map_spot_menu_add_property",     on_map_spot_menu_add_property)
         RegisterScriptCallback("map_spot_menu_property_clicked", on_map_spot_menu_property_clicked)
         RegisterScriptCallback("on_option_change",               on_option_change)
@@ -343,7 +349,7 @@ actor_on_first_update = function()
         return true
     end)
 end
-dft_menu_item_is_ours = function(text)
+menu_item_is_ours = function(text)
     if not text or text == "" then return false end
     local markers = {
         dft_str("dft_menu_travel_here"),
@@ -359,7 +365,7 @@ dft_menu_item_is_ours = function(text)
     return false
 end
 
-dft_strip_own_menu_items = function(pui)
+strip_own_menu_items = function(pui)
     pcall(function()
         if not (pui and pui.GetItemsCount and pui.GetItemByIndex and pui.RemoveItem) then return end
         local count = pui:GetItemsCount()
@@ -371,7 +377,7 @@ dft_strip_own_menu_items = function(pui)
                     local tc = item:GetTextItem()
                     if tc then text = tc:GetText() or "" end
                 end)
-                if dft_menu_item_is_ours(text) then
+                if menu_item_is_ours(text) then
                     pui:RemoveItem(item)
                 end
             end
@@ -379,14 +385,14 @@ dft_strip_own_menu_items = function(pui)
     end)
 end
 
-dft_add_cannot_travel_item = function(pui, id, reason)
+add_cannot_travel_item = function(pui, id, reason)
     pui:AddItem(dft_str("dft_msg_cannot_travel_here"))
     dft_log("menu: cannot travel id=%s reason=%s", tostring(id), tostring(reason or "unknown"))
     dft_clear_path_preview()
     return true
 end
 
-dft_add_guide_menu_item = function(pui, id, se_obj)
+add_guide_menu_item = function(pui, id, se_obj)
     local dist, from_lid, to_lid = dft_guide_distance(nil, se_obj, id)
     local guide_text = dft_str("dft_menu_hire_guide")
     local guide_cost = dft_calc_guide_cost(dist, from_lid, to_lid)
@@ -396,7 +402,7 @@ dft_add_guide_menu_item = function(pui, id, se_obj)
     dft_log("menu: guide id=%s cost=%d dist=%.0f dur=%s", tostring(id), guide_cost, dist, dur_str)
 end
 
-dft_add_travel_menu_items = function(pui, id, is_lc, include_sneak)
+add_travel_menu_items = function(pui, id, is_lc, include_sneak)
     if dft_actor_too_encumbered_to_move() then
         pui:AddItem(dft_str("dft_msg_too_encumbered"))
         dft_clear_path_preview()
@@ -423,7 +429,7 @@ dft_add_travel_menu_items = function(pui, id, is_lc, include_sneak)
 end
 
 
-dft_on_map_right_click = function(property_ui, map_table)
+on_map_right_click = function(property_ui, map_table)
     if dft.right_click_avail then
         dft.menu_open_seq = (dft.menu_open_seq or 0) + 1
         dft.menu_resolve_cache = nil
@@ -451,7 +457,12 @@ on_map_spot_menu_add_property_impl = function(pui, id, ln, hint)
     end
 
     dft.last_menu_target_id = id
-    dft_strip_own_menu_items(pui)
+    strip_own_menu_items(pui)
+
+    local click_pos = dft.last_map_click_pos
+    if dft_resolve_menu_spot_from_click and click_pos then
+        id, ln = dft_resolve_menu_spot_from_click(id, ln, click_pos, alife_object(id))
+    end
 
     local se_obj = alife_object(id)
     dft_log_menu_diag(id, se_obj, ln, hint)
@@ -463,11 +474,11 @@ on_map_spot_menu_add_property_impl = function(pui, id, ln, hint)
     end
 
     local is_lc = dft_is_pda_transition(id, se_obj)
+            or (dft_is_registry_transition_door and dft_is_registry_transition_door(id))
     local is_campfire = dft_is_campfire(id, se_obj)
     local is_base = dft_is_base(id, se_obj)
     local is_stash = dft_is_player_stash(id, se_obj)
     local cross_zone = dft_is_cross_zone_destination(se_obj, ln)
-    local click_pos = dft.last_map_click_pos
     dft.last_menu_target_ln = ln
 
     dft_log("menu: #%d id=%s ln=%s hint=%s cur=%s lc=%s base=%s campfire=%s stash=%s cross=%s",
@@ -508,11 +519,11 @@ on_map_spot_menu_add_property_impl = function(pui, id, ln, hint)
                 dft_clear_path_preview()
                 return false
             end
-            return dft_add_cannot_travel_item(pui, id, terr)
+            return add_cannot_travel_item(pui, id, terr)
         end
         dft.last_menu_target_id = id
         maybe_preview(true)
-        return dft_add_travel_menu_items(pui, id, true)
+        return add_travel_menu_items(pui, id, true)
     end
 
     if is_campfire then
@@ -524,7 +535,7 @@ on_map_spot_menu_add_property_impl = function(pui, id, ln, hint)
         resolve_base_or_campfire()
         dft.last_menu_target_id = id
         maybe_preview(false)
-        return dft_add_travel_menu_items(pui, id, false)
+        return add_travel_menu_items(pui, id, false)
     end
 
     if is_base then
@@ -532,14 +543,14 @@ on_map_spot_menu_add_property_impl = function(pui, id, ln, hint)
             resolve_base_or_campfire()
             dft.last_menu_target_id = id
             dft_clear_path_preview()
-            dft_add_guide_menu_item(pui, id, se_obj)
+            add_guide_menu_item(pui, id, se_obj)
             return true
         end
         resolve_base_or_campfire()
         dft.last_menu_target_id = id
         maybe_preview(false)
-        local ok = dft_add_travel_menu_items(pui, id, false)
-        dft_add_guide_menu_item(pui, id, se_obj)
+        local ok = add_travel_menu_items(pui, id, false)
+        add_guide_menu_item(pui, id, se_obj)
         return ok
     end
 
@@ -548,13 +559,13 @@ on_map_spot_menu_add_property_impl = function(pui, id, ln, hint)
         dft.last_menu_target_id = id
         dft_clear_path_preview()
         dft_strip_backpack_travel_menu_items(pui)
-        dft_add_guide_menu_item(pui, id, se_obj)
+        add_guide_menu_item(pui, id, se_obj)
         return true
     end
 
     if dft_is_place_like_spot(se_obj) then
         dft_log("menu: unclassified place-like spot id=%s - showing cannot-travel", tostr(id))
-        return dft_add_cannot_travel_item(pui, id, "not_a_destination")
+        return add_cannot_travel_item(pui, id, "not_a_destination")
     end
 
     dft_log("menu: skip (not a travel destination)")
@@ -621,11 +632,11 @@ end
 -- dft_publish_to_global - every other zzz_dorn_fast_travel_0X script explicitly re-exports its
 -- functions this way because a bare top-level "function foo()" is NOT automatically visible from
 -- another script file here. These two are the only functions in this file any other DFT script
--- calls (dft_abort_journey from zzz_dorn_fast_travel_08_travel.script to cancel a journey when
+-- calls (abort_journey from zzz_dorn_fast_travel_08_travel.script to cancel a journey when
 -- the PDA closes; refresh_active_config from zzz_dorn_fast_travel_01_core.script/08_travel.script
 -- to read the message-duration MCM setting) - everything else here (menu building, event
 -- callbacks) is only ever used within this same file, so it stays a private local function.
 do
-    _G.dft_abort_journey = dft_abort_journey
+    _G.dft_abort_journey = abort_journey
     _G.refresh_active_config = refresh_active_config
 end

@@ -98,4 +98,15 @@
 	<string id="dft_hud_sneak_cooldown">
 		<text>Sneak cooldown: %s</text>
 	</string>
+
+	<!-- Zone-exit transition countdown HUD -->
+	<string id="dft_hud_transition_countdown">
+		<text>Traveling to %s in %s</text>
+	</string>
+	<string id="dft_hud_transition_countdown_prefix">
+		<text>Traveling to %s in </text>
+	</string>
+	<string id="dft_hud_transition_combat_blocked">
+		<text>Cannot travel while in combat</text>
+	</string>
 </string_table>

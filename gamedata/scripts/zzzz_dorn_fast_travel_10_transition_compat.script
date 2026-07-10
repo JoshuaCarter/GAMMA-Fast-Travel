@@ -1,0 +1,237 @@
+-- Dorn's Fast Travel: gate sr_teleport / extra-transition travel on the DFT zone timer.
+-- Patches are applied from on_game_start (and retried on actor update) so they
+-- survive later ui_sr_teleport / lc_extra_transitions_ui reloads.
+
+local dft = _G.dft
+
+local function gate_transition_allowed()
+    return dft_transition_allowed and dft_transition_allowed()
+end
+
+local function gate_log(fmt, ...)
+    if dft_trans_log then
+        dft_trans_log(fmt, ...)
+    else
+        printf("[DFT-TRANS] " .. string.format(fmt, ...))
+    end
+end
+
+local function try_auto_transition_travel()
+    if not gate_transition_allowed() then
+        if dft then dft._transition_auto_trip = nil end
+        return
+    end
+    if not (dft and dft._transition_zone_inside and dft._transition_zone_door_id) then return end
+    local door_id = dft._transition_zone_door_id
+    if dft._transition_auto_trip == door_id then return end
+
+    local obj = level.object_by_id(door_id)
+    if not obj then return end
+
+    if _G.lc_extra_transitions and _G.lc_extra_transitions.lc_pool then
+        local sec = nil
+        pcall(function() sec = obj:section() end)
+        if sec and _G.lc_extra_transitions.lc_pool[sec] then
+            dft._transition_auto_trip = door_id
+            gate_log("auto-travel lc_extra door=%s sec=%s", tostring(door_id), tostring(sec))
+            _G.lc_extra_transitions.teleport_actor(db.actor, obj)
+            return
+        end
+    end
+end
+
+local function on_before_level_changing()
+    if not dft_trans_log then return end
+    local remaining = (dft and dft._transition_remaining_ms or 0) / 1000
+    dft_trans_log("on_before_level_changing remaining=%.1fs allowed=%s inside=%s door=%s",
+        remaining,
+        tostring(dft_transition_allowed and dft_transition_allowed()),
+        tostring(dft and dft._transition_zone_inside),
+        tostring(dft and dft._transition_zone_door_id))
+end
+
+local function patch_sr_teleport_class(cls)
+    if not (cls and cls.StartCountdown and not cls._dft_start_patched) then return false end
+
+    local orig_start = cls.StartCountdown
+    function cls:StartCountdown()
+        if not gate_transition_allowed() then
+            gate_log("sr_teleport StartCountdown blocked name=%s", tostring(self.name))
+            return
+        end
+        gate_log("sr_teleport StartCountdown auto-travel name=%s", tostring(self.name))
+        self:OnMsgOk()
+    end
+    cls._dft_start_patched = true
+    gate_log("patched msg_box_ui.StartCountdown")
+
+    if cls.OnMsgOk and not cls._dft_ok_patched then
+        local orig_ok = cls.OnMsgOk
+        function cls:OnMsgOk()
+            local allowed = gate_transition_allowed()
+            local remaining = (dft and dft._transition_remaining_ms or 0) / 1000
+            gate_log("sr_teleport OnMsgOk name=%s allowed=%s remaining=%.1fs",
+                tostring(self.name), tostring(allowed), remaining)
+            if not allowed then return end
+            orig_ok(self)
+        end
+        cls._dft_ok_patched = true
+        gate_log("patched msg_box_ui.OnMsgOk")
+    end
+
+    if cls.InitControls and not cls._dft_init_patched then
+        local orig_init = cls.InitControls
+        function cls:InitControls()
+            if self.disable_msg then
+                if not gate_transition_allowed() then
+                    gate_log("InitControls disable_msg blocked name=%s", tostring(self.name))
+                    return
+                end
+                if not self.item or db.actor:object(self.item) then
+                    self:OnMsgOk()
+                else
+                    self:OnMsgCancel()
+                end
+                return
+            end
+            if not gate_transition_allowed() then
+                gate_log("InitControls suppressed name=%s", tostring(self.name))
+                if self.message_box then
+                    pcall(function() self.message_box:InitMessageBox("message_box_yes_no") end)
+                end
+                return
+            end
+            gate_log("InitControls auto-confirm name=%s", tostring(self.name))
+            self:OnMsgOk()
+        end
+        cls._dft_init_patched = true
+        gate_log("patched msg_box_ui.InitControls")
+    end
+
+    return true
+end
+
+local function patch_tarkov_countdown(mod, name)
+    if not (mod and type(mod.start) == "function" and not mod._dft_gate_patched) then return false end
+    mod.start = function(opts)
+        if not gate_transition_allowed() then
+            gate_log("shared transition countdown.start blocked (%s)", tostring(name))
+            return nil
+        end
+        if opts and opts.is_inside and opts.on_finish and opts.is_inside() then
+            opts.on_finish()
+        end
+        return nil
+    end
+    mod._dft_gate_patched = true
+    gate_log("patched shared transition countdown.start (%s)", tostring(name))
+    return true
+end
+
+local function install_transition_gates()
+    local patched_any = false
+
+    -- ui_sr_teleport.msg_box_ui lives on _G; bare msg_box_ui is nil in zzzz script env
+    if patch_sr_teleport_class(_G.msg_box_ui) then
+        patched_any = true
+    end
+
+    if patch_tarkov_countdown(_G.tarkov_transitions_countdown, "tarkov_transitions_countdown") then
+        patched_any = true
+    end
+
+    for gname, mod in pairs(_G) do
+        if type(gname) == "string" and gname:match("_transitions_countdown$") then
+            if patch_tarkov_countdown(mod, gname) then
+                patched_any = true
+            end
+        end
+    end
+
+    if _G.lc_extra_transitions and _G.lc_extra_transitions.teleport_actor
+            and not _G.lc_extra_transitions._dft_gate_patched then
+        local orig_extra = _G.lc_extra_transitions.teleport_actor
+        _G.lc_extra_transitions.teleport_actor = function(actor, obj)
+            local allowed = gate_transition_allowed()
+            local oid = nil
+            if obj then
+                local ok, id = pcall(function() return obj:id() end)
+                if ok then oid = id end
+            end
+            gate_log("lc_extra_transitions.teleport_actor id=%s allowed=%s", tostring(oid), tostring(allowed))
+            if not allowed then return end
+            orig_extra(actor, obj)
+        end
+        _G.lc_extra_transitions._dft_gate_patched = true
+        patched_any = true
+        gate_log("patched lc_extra_transitions.teleport_actor")
+    end
+
+    if _G.lc_extra_transitions and _G.lc_extra_transitions.handle_nearby_actor
+            and not _G.lc_extra_transitions._dft_nearby_patched then
+        local orig_nearby = _G.lc_extra_transitions.handle_nearby_actor
+        _G.lc_extra_transitions.handle_nearby_actor = function(actor, obj)
+            if not gate_transition_allowed() then
+                gate_log("lc_extra handle_nearby_actor suppressed id=%s", tostring(obj and obj:id()))
+                return
+            end
+            local sec = obj and obj:section()
+            local v = sec and _G.lc_extra_transitions.lc_pool and _G.lc_extra_transitions.lc_pool[sec]
+            if v and not v.disable_dialog then
+                gate_log("lc_extra handle_nearby_actor auto-travel id=%s", tostring(obj:id()))
+                _G.lc_extra_transitions.teleport_actor(actor, obj)
+                return
+            end
+            orig_nearby(actor, obj)
+        end
+        _G.lc_extra_transitions._dft_nearby_patched = true
+        patched_any = true
+        gate_log("patched lc_extra_transitions.handle_nearby_actor")
+    end
+
+    if not dft._transition_gates_callback_registered then
+        RegisterScriptCallback("actor_on_first_update", install_transition_gates)
+        dft._transition_gates_callback_registered = true
+    end
+
+    if not dft._transition_gates_done then
+        local need_msg = not (_G.msg_box_ui and _G.msg_box_ui._dft_start_patched)
+        local need_extra = not (_G.lc_extra_transitions and _G.lc_extra_transitions._dft_gate_patched)
+        if not (need_msg or need_extra) then
+            dft._transition_gates_done = true
+        elseif not dft._transition_gates_retry_registered then
+            RegisterScriptCallback("actor_on_update", function()
+                if dft._transition_gates_done then return end
+                local tg = time_global()
+                if dft._transition_gates_retry_next and tg < dft._transition_gates_retry_next then return end
+                dft._transition_gates_retry_next = tg + 1000
+                install_transition_gates()
+            end)
+            dft._transition_gates_retry_registered = true
+        end
+    end
+
+    if not dft._transition_lock_initialized then
+        dft._transition_lock_initialized = true
+        if dft_init_transition_lock then
+            dft_init_transition_lock()
+        end
+    end
+
+    if not dft._transition_before_lc_registered then
+        RegisterScriptCallback("on_before_level_changing", on_before_level_changing)
+        dft._transition_before_lc_registered = true
+    end
+
+    if patched_any or not dft._transition_gates_announced then
+        dft._transition_gates_announced = true
+        gate_log("transition gates installed (msg_box_ui=%s tarkov=%s)",
+            tostring(_G.msg_box_ui ~= nil), tostring(_G.tarkov_transitions_countdown ~= nil))
+    end
+end
+
+do
+    _G.dft_install_transition_gates = install_transition_gates
+    _G.dft_on_before_level_changing = on_before_level_changing
+    _G.dft_try_auto_transition_travel = try_auto_transition_travel
+end

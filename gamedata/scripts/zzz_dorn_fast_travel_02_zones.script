@@ -5,9 +5,8 @@
 local dft = _G.dft
 -- Forward declarations for this file's private (non-exported) helpers, so they can
 -- reference each other regardless of definition order below.
-local dft_count_zone_edges, dft_persist_zone_map, dft_scan_transition_object,
-    dft_try_restore_zone_map, dft_zone_map_pack, dft_zone_map_unpack
-function dft_build_level_names_registry()
+local count_zone_edges, persist_zone_map, scan_transition_object, try_restore_zone_map, zone_map_pack, zone_map_unpack
+local function build_level_names_registry()
     local sgsub = string.gsub
     if dft.level_registry_built then
         return
@@ -102,11 +101,11 @@ function dft_build_level_names_registry()
     dft.level_registry_built = true
 end
 
-function dft_resolve_level_name(level_id)
+local function resolve_level_name(level_id)
     local sgsub = string.gsub
     if not level_id then return nil end
     if next(dft.level_names) == nil then
-        dft_build_level_names_registry()
+        build_level_names_registry()
     end
     if dft.level_names[level_id] then return dft.level_names[level_id] end
 
@@ -195,9 +194,9 @@ function dft_resolve_level_name(level_id)
 end
 
 -- Zone topology is static for a given mod loadout; scan once per save and persist via alife_storage_manager.
-local dft_zone_map_version = 1
+local zone_map_version = 1
 
-dft_count_zone_edges = function(map)
+count_zone_edges = function(map)
     map = map or dft.dynamic_map or {}
     local n = 0
     for _, dsts in pairs(map) do
@@ -206,7 +205,7 @@ dft_count_zone_edges = function(map)
     return n
 end
 
-dft_zone_map_pack = function()
+zone_map_pack = function()
     local edges = {}
     for src, dsts in pairs(dft.dynamic_map or {}) do
         for dst, _ in pairs(dsts) do
@@ -219,11 +218,11 @@ dft_zone_map_pack = function()
             doors[#doors + 1] = { s = src, d = dst, i = ids }
         end
     end
-    return { v = dft_zone_map_version, e = edges, r = doors }
+    return { v = zone_map_version, e = edges, r = doors }
 end
 
-dft_zone_map_unpack = function(blob)
-    if not (blob and blob.v == dft_zone_map_version and blob.e and #blob.e > 0) then
+zone_map_unpack = function(blob)
+    if not (blob and blob.v == zone_map_version and blob.e and #blob.e > 0) then
         return false
     end
     dft.dynamic_map = {}
@@ -248,32 +247,32 @@ dft_zone_map_unpack = function(blob)
     return next(dft.dynamic_map) ~= nil
 end
 
-dft_persist_zone_map = function(m_data)
+persist_zone_map = function(m_data)
     if m_data and dft.dynamic_map and next(dft.dynamic_map) then
-        m_data.dft_zone_map = dft_zone_map_pack()
+        m_data.dft_zone_map = zone_map_pack()
     end
 end
 
-dft_try_restore_zone_map = function()
+try_restore_zone_map = function()
     local ok, m_data = pcall(alife_storage_manager.get_state)
-    if ok and m_data and m_data.dft_zone_map and dft_zone_map_unpack(m_data.dft_zone_map) then
-        dft_log("Zone map restored from save (%d transitions).", dft_count_zone_edges())
+    if ok and m_data and m_data.dft_zone_map and zone_map_unpack(m_data.dft_zone_map) then
+        dft_log("Zone map restored from save (%d transitions).", count_zone_edges())
         return true
     end
     return false
 end
 
-function dft_on_load_state(m_data)
+local function on_load_state(m_data)
     if m_data and m_data.dft_zone_map and not next(dft.dynamic_map or {}) then
-        dft_zone_map_unpack(m_data.dft_zone_map)
+        zone_map_unpack(m_data.dft_zone_map)
     end
 end
 
-function dft_on_save_state(m_data)
-    dft_persist_zone_map(m_data)
+local function on_save_state(m_data)
+    persist_zone_map(m_data)
 end
 
-dft_scan_transition_object = function(obj, sim, gg, total_ref)
+scan_transition_object = function(obj, sim, gg, total_ref)
     if not obj then return end
     local cls = 0
     pcall(function() cls = obj:clsid() end)
@@ -282,12 +281,12 @@ dft_scan_transition_object = function(obj, sim, gg, total_ref)
     if cls == clsid.level_changer or (clsid.level_changer_s and cls == clsid.level_changer_s) then
         local ok_src, src_lid = pcall(function() return gg:vertex(obj.m_game_vertex_id):level_id() end)
         if ok_src then
-            local src_name = dft_resolve_level_name(src_lid)
+            local src_name = resolve_level_name(src_lid)
             if src_name then
                 local dgv = obj.dest_game_vertex_id or obj.m_dest_game_vertex_id
                 if dgv and dgv < 65535 and gg:valid_vertex_id(dgv) then
                     local dst_lid = gg:vertex(dgv):level_id()
-                    local dst_name = dft_resolve_level_name(dst_lid)
+                    local dst_name = resolve_level_name(dst_lid)
                     if dst_name and src_name ~= dst_name then
                         dft.dynamic_map[src_name] = dft.dynamic_map[src_name] or {}
                         dft.dynamic_map[src_name][dst_name] = true
@@ -309,15 +308,15 @@ dft_scan_transition_object = function(obj, sim, gg, total_ref)
         if not dft_is_trader_restrictor(obj_name) and is_lc then
             local src_name, dst_name
             local ok_src, src_lid = pcall(function() return gg:vertex(obj.m_game_vertex_id):level_id() end)
-            src_name = ok_src and dft_resolve_level_name(src_lid)
+            src_name = ok_src and resolve_level_name(src_lid)
 
             local dest_lvl = ini:line_exist("sr_level_changer", "dest_level") and ini:r_string("sr_level_changer", "dest_level")
             local dgv = ini:line_exist("sr_level_changer", "dest_game_vertex") and ini:r_u32("sr_level_changer", "dest_game_vertex")
             if dest_lvl then
-                dst_name = dft_resolve_level_name(dest_lvl)
+                dst_name = resolve_level_name(dest_lvl)
             elseif dgv and gg:valid_vertex_id(dgv) then
                 local ok_dst, dst_lid = pcall(function() return gg:vertex(dgv):level_id() end)
-                if ok_dst then dst_name = dft_resolve_level_name(dst_lid) end
+                if ok_dst then dst_name = resolve_level_name(dst_lid) end
             end
 
             if not dst_name and (has_marker or is_name_match) then
@@ -348,16 +347,16 @@ dft_scan_transition_object = function(obj, sim, gg, total_ref)
         local v = _G.lc_extra_transitions.lc_pool[sec]
         local ok_src, src_lid = pcall(function() return gg:vertex(obj.m_game_vertex_id):level_id() end)
         if ok_src then
-            local src_name = dft_resolve_level_name(src_lid)
+            local src_name = resolve_level_name(src_lid)
             local dst_name
             if v.to_gvid then
                 local dg = tonumber(v.to_gvid)
                 if dg and gg:valid_vertex_id(dg) then
                     local ok_dst, dst_lid = pcall(function() return gg:vertex(dg):level_id() end)
-                    if ok_dst then dst_name = dft_resolve_level_name(dst_lid) end
+                    if ok_dst then dst_name = resolve_level_name(dst_lid) end
                 end
             elseif v.link and _G.lc_extra_transitions.lc_pool[v.link] then
-                dst_name = dft_resolve_level_name(_G.lc_extra_transitions.lc_pool[v.link].level)
+                dst_name = resolve_level_name(_G.lc_extra_transitions.lc_pool[v.link].level)
             end
             if src_name and dst_name and src_name ~= dst_name then
                 dft.dynamic_map[src_name] = dft.dynamic_map[src_name] or {}
@@ -371,12 +370,12 @@ dft_scan_transition_object = function(obj, sim, gg, total_ref)
     end
 end
 
-function dft_build_dynamic_map()
+local function build_dynamic_map()
     if dft.dynamic_map and next(dft.dynamic_map) then
-        dft_log("Zone map ready (%d transitions, in-memory).", dft_count_zone_edges())
+        dft_log("Zone map ready (%d transitions, in-memory).", count_zone_edges())
         return
     end
-    if dft_try_restore_zone_map() then return end
+    if try_restore_zone_map() then return end
     dft_log("Building zone map (first run this save)...")
     local sim = alife()
     local gg = game_graph()
@@ -392,11 +391,11 @@ function dft_build_dynamic_map()
 
     if sim.iterate_objects then
         sim:iterate_objects(function(obj)
-            dft_scan_transition_object(obj, sim, gg, total_ref)
+            scan_transition_object(obj, sim, gg, total_ref)
         end)
     else
         for i = 1, 65534 do
-            dft_scan_transition_object(sim:object(i), sim, gg, total_ref)
+            scan_transition_object(sim:object(i), sim, gg, total_ref)
         end
     end
     local total = total_ref[1]
@@ -408,14 +407,14 @@ function dft_build_dynamic_map()
             local src_name, dst_name
 
             if v.level and v.link and pool[v.link] then
-                src_name = dft_resolve_level_name(v.level)
-                dst_name = dft_resolve_level_name(pool[v.link].level)
+                src_name = resolve_level_name(v.level)
+                dst_name = resolve_level_name(pool[v.link].level)
             elseif v.gvid and v.to_gvid then
                 local sg = tonumber(v.gvid)
                 local dg = tonumber(v.to_gvid)
                 if sg and dg and gg:valid_vertex_id(sg) and gg:valid_vertex_id(dg) then
-                    src_name = dft_resolve_level_name(gg:vertex(sg):level_id())
-                    dst_name = dft_resolve_level_name(gg:vertex(dg):level_id())
+                    src_name = resolve_level_name(gg:vertex(sg):level_id())
+                    dst_name = resolve_level_name(gg:vertex(dg):level_id())
                 end
             end
 
@@ -431,15 +430,15 @@ function dft_build_dynamic_map()
 
     dft_log("Zone map built: %d transitions (saved for this playthrough).", total)
     pcall(function()
-        dft_persist_zone_map(alife_storage_manager.get_state())
+        persist_zone_map(alife_storage_manager.get_state())
     end)
 end
 
 -- dft_publish_to_global
 do
-    _G.dft_build_level_names_registry = dft_build_level_names_registry
-    _G.dft_resolve_level_name = dft_resolve_level_name
-    _G.dft_on_load_state = dft_on_load_state
-    _G.dft_on_save_state = dft_on_save_state
-    _G.dft_build_dynamic_map = dft_build_dynamic_map
+    _G.dft_build_level_names_registry = build_level_names_registry
+    _G.dft_resolve_level_name = resolve_level_name
+    _G.dft_on_load_state = on_load_state
+    _G.dft_on_save_state = on_save_state
+    _G.dft_build_dynamic_map = build_dynamic_map
 end

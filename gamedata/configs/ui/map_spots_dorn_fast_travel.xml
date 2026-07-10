@@ -1,5 +1,5 @@
 <!-- Dorn's Fast Travel: path dots on the PDA map (grey = ahead, green = passed,
-     blue = dodged a threat here, red = ambushed here; ambush also shows green_location pin) -->
+     blue = dodged a threat here, red = ambushed here) -->
 <dft_path_dot>
 	<level_map spot="dft_path_dot_spot"/>
 </dft_path_dot>
@@ -20,6 +20,13 @@
 <dft_path_dot_ambush_spot x="0" y="0" width="4" height="4" alignment="c" scale="1" scale_min="1" scale_max="1.5" stretch="0">
 	<texture>ui_dorn_path_dot_red</texture>
 </dft_path_dot_ambush_spot>
+
+<dft_path_dot_ambush_icon>
+	<level_map spot="dft_path_dot_ambush_icon_spot"/>
+</dft_path_dot_ambush_icon>
+<dft_path_dot_ambush_icon_spot x="0" y="0" width="16" height="16" alignment="c" scale="1" scale_min="1" scale_max="1.5" stretch="0">
+	<texture>ui_dorn_path_icon_ambush</texture>
+</dft_path_dot_ambush_icon_spot>
 
 <dft_path_dot_dodge>
 	<level_map spot="dft_path_dot_dodge_spot"/>
