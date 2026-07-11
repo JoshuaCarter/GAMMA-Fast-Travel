@@ -2029,9 +2029,29 @@ build_navmesh_path = function(start_pos, dest_pos, build_opts)
         end
     end
 
-    if weak.dest and not reached then
-        dft_path_road_log("A* nav: weak dest connector (drift beyond mesh hop)")
-        return nil, nil, nil, false, "final_hop_blocked", nil
+    if weak.dest then
+        -- Last mesh point cannot reach the exact click/dest position. Keep the navmesh
+        -- portion and bridge the remainder with a NO_LAND patch (never discard the whole
+        -- partial chain and fall back to a straight line).
+        local last = raw_chain[#raw_chain]
+        local gap = last and chain_point_dist(last, dest_pos) or nil
+        if last and gap and gap > 0.5 then
+            local patch_from = #raw_chain
+            raw_chain[#raw_chain + 1] = chain_copy_point(dest_pos)
+            no_land_segments[#no_land_segments + 1] = { from_idx = patch_from, to_idx = #raw_chain }
+            if not reached then
+                build_mode = (build_mode or "partial") .. "_dest_patch"
+            else
+                build_mode = (build_mode or "forward") .. "_dest_patch"
+            end
+            dft_path_road_log(
+                "A* nav: dest patch NO_LAND (%.0fm, %d pts, reached=%s)",
+                gap, #raw_chain, tostring(reached)
+            )
+        elseif not reached then
+            dft_path_road_log("A* nav: weak dest connector (drift beyond mesh hop)")
+            return nil, nil, nil, false, "final_hop_blocked", nil
+        end
     end
 
     local path_meta = build_path_meta(raw_chain, no_land_segments, build_mode)
@@ -2197,7 +2217,7 @@ build_line_snap_path = function(start_pos, dest_pos)
     local path_len = polyline_length(chain)
     local fallback_meta = {
         safe_vertices = { 1, 2 },
-        no_land_segments = { { from_idx = 1, to_idx = 2 } },
+        no_land_segments = {},
         mode = "fallback_straight",
     }
     return chain, is_vertex, path_len, chain, fallback_meta
