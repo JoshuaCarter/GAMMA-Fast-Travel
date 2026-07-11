@@ -7,7 +7,7 @@ local dft_config = _G.dft_config
 
 -- Forward declarations for this file's private (non-exported) helpers, so they can
 -- reference each other regardless of definition order below.
-local astar_navmesh_path, build_line_snap_path, build_navmesh_path, build_path_preview, build_preview_markers, clear_path_preview, densify_polyline, enforce_ambush_standoff, ensure_graph_spatial_index, get_cached_line_snap_path, graph_near_road_fast, has_nearby_hostiles_at, horizontal_dist, is_pos_safe_from_anomalies, lvid_accessible, lvid_ground_pos, mesh_line_reachable, mesh_step, nearest_dot_index_for_ratio, nearest_hostile_world, nearest_road_node_fast, nearest_accessible_nav_vertex, path_preview_enabled, path_stats_for_target, place_ambush_landing, polyline_length, polyline_pos_at_ratio, ray_snap_ground_pos, smooth_navmesh_chain, squad_community_hostile, valid_lvid
+local ambush_ground_snap, astar_navmesh_path, build_line_snap_path, build_navmesh_path, build_path_preview, build_preview_markers, clear_path_preview, densify_polyline, enforce_ambush_standoff, ensure_graph_spatial_index, finalize_ambush_landing, get_cached_line_snap_path, graph_near_road_fast, has_nearby_hostiles_at, horizontal_dist, is_pos_safe_from_anomalies, lvid_accessible, lvid_ground_pos, mesh_line_reachable, mesh_step, nearest_dot_index_for_ratio, nearest_hostile_world, nearest_road_node_fast, nearest_accessible_nav_vertex, path_preview_enabled, path_stats_for_target, place_ambush_landing, polyline_length, polyline_pos_at_ratio, ray_snap_ground_pos, smooth_navmesh_chain, squad_community_hostile, valid_lvid
 local function lerp_pos(p1, p2, ratio, out)
     if not (p1 and p2 and out) then return end
     out:set(
@@ -644,7 +644,7 @@ place_ambush_landing = function(anchor_pos, targets, standoff_m, approach_pos)
     return out
 end
 
-local function finalize_ambush_landing(pos, targets, approach_pos, opts)
+finalize_ambush_landing = function(pos, targets, approach_pos, opts)
     opts = opts or {}
     if not (pos and targets) then return pos, opts.lvid end
     local amb = _G.dft_ambush or {}
@@ -664,7 +664,7 @@ local function finalize_ambush_landing(pos, targets, approach_pos, opts)
     return out, lvid
 end
 
-local function ambush_ground_snap(pos, lvid)
+ambush_ground_snap = function(pos, lvid)
     return find_ground_pos(pos, nil, nil, {
         anchor = pos,
         max_drift_m = 12,
