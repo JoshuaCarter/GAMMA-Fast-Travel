@@ -449,6 +449,9 @@ end
 
 local function handle_dev_keys(key)
     if not key then return end
+    if _G.dft_coarse_nav_handle_key then
+        _G.dft_coarse_nav_handle_key(key)
+    end
     local cfg = _G.dft_config
     if not cfg then return end
     if cfg.sneaking_level_up and key == cfg.sneaking_level_up then

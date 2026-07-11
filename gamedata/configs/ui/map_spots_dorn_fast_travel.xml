@@ -25,7 +25,8 @@
 	<level_map spot="dft_path_dot_ambush_icon_spot"/>
 </dft_path_dot_ambush_icon>
 <dft_path_dot_ambush_icon_spot x="0" y="0" width="16" height="16" alignment="c" scale="1" scale_min="1" scale_max="1.5" stretch="0">
-	<texture>ui_dorn_path_icon_ambush</texture>
+	<!-- ui_frame_error_sign_red @ G.A.M.M.A. UI gamedata/textures/ui/ui_common.dds -->
+	<texture x="800" y="0" width="77" height="77">ui\ui_common</texture>
 </dft_path_dot_ambush_icon_spot>
 
 <dft_path_dot_dodge>
@@ -49,6 +50,28 @@
 <dft_path_debug_edge_spot x="0" y="0" width="2" height="2" alignment="c" scale="1" scale_min="1" scale_max="1.5" stretch="0">
 	<texture>ui_dorn_path_dot_grey</texture>
 </dft_path_debug_edge_spot>
+
+<!-- Coarse navmesh dev overlay: blue = graph node, green 8x8 = resolved destination -->
+<dft_coarse_node>
+	<level_map spot="dft_coarse_node_spot"/>
+</dft_coarse_node>
+<dft_coarse_node_spot x="0" y="0" width="4" height="4" alignment="c" scale="1" scale_min="1" scale_max="1.5" stretch="0">
+	<texture>ui_dorn_path_dot_blue</texture>
+</dft_coarse_node_spot>
+
+<dft_coarse_endpoint>
+	<level_map spot="dft_coarse_endpoint_spot"/>
+</dft_coarse_endpoint>
+<dft_coarse_endpoint_spot x="0" y="0" width="8" height="8" alignment="c" scale="1" scale_min="1" scale_max="1.5" stretch="0">
+	<texture>ui_dorn_path_dot_green</texture>
+</dft_coarse_endpoint_spot>
+
+<dft_coarse_edge>
+	<level_map spot="dft_coarse_edge_spot"/>
+</dft_coarse_edge>
+<dft_coarse_edge_spot x="0" y="0" width="3" height="3" alignment="c" scale="1" scale_min="1" scale_max="1.5" stretch="0">
+	<texture>ui_dorn_path_dot_grey</texture>
+</dft_coarse_edge_spot>
 
 <!-- Yellow ring segment for ambush detection radius (TLRA-style PDA circle outline) -->
 <dft_ambush_range_ring>

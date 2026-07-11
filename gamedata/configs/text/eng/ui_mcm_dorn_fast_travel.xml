@@ -50,4 +50,10 @@
 	<string id="ui_mcm_dorn_fast_travel_sneaking_level_down_desc">
 		<text>Development keybind: decrease Sneaking skill level by 1.</text>
 	</string>
+	<string id="ui_mcm_dorn_fast_travel_coarse_nav_build">
+		<text>Build Coarse Nav Cache</text>
+	</string>
+	<string id="ui_mcm_dorn_fast_travel_coarse_nav_build_desc">
+		<text>Development keybind: build the per-level coarse navmesh graph (bases and level transitions, all pairs). When bound, the graph is shown on the PDA map after build or level load if a cache exists.</text>
+	</string>
 </string_table>

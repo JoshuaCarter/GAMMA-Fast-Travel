@@ -565,6 +565,10 @@ local function actor_on_update()
         pcall(update_sneak_cooldown_hud)
     end
 
+    if _G.dft_coarse_nav_on_actor_update then
+        pcall(_G.dft_coarse_nav_on_actor_update)
+    end
+
     pcall(enforce_transition_combat_lock)
 
     if dft.is_traveling and emission_started_unexpectedly() then

@@ -28,6 +28,7 @@ local MCM_DEV_KEYS = {
     path_preview        = true,
     sneaking_level_up   = true,
     sneaking_level_down = true,
+    coarse_nav_build    = true,
 }
 
 -- ============================================================
@@ -70,6 +71,11 @@ local function load_config()
         and dft_dorn.mcm.key(MOD_ID, MCM_SECTION_DEV .. "/sneaking_level_up", nil)
     dft_config.sneaking_level_down = dft_dorn and dft_dorn.mcm
         and dft_dorn.mcm.key(MOD_ID, MCM_SECTION_DEV .. "/sneaking_level_down", nil)
+    dft_config.coarse_nav_build = dft_dorn and dft_dorn.mcm
+        and dft_dorn.mcm.key(MOD_ID, MCM_SECTION_DEV .. "/coarse_nav_build", nil)
+    if _G.dft_coarse_nav_sync_display then
+        pcall(_G.dft_coarse_nav_sync_display)
+    end
     if _G.refresh_active_config then
         _G.refresh_active_config()
     elseif refresh_active_config then
@@ -165,6 +171,9 @@ function on_game_start()
         if dft_on_level_changing then
             RegisterScriptCallback("on_level_changing", dft_on_level_changing)
         end
+        if _G.dft_coarse_nav_on_level_change then
+            RegisterScriptCallback("on_level_changing", _G.dft_coarse_nav_on_level_change)
+        end
         if dft_install_transition_gates then
             dft_install_transition_gates()
         end
@@ -249,6 +258,9 @@ actor_on_first_update = function()
     CreateTimeEvent("dft", "warm_graph_cache", 1.5, function()
         if _G.dft_ensure_level_graph_cache then
             pcall(_G.dft_ensure_level_graph_cache)
+        end
+        if _G.dft_coarse_nav_try_load then
+            pcall(_G.dft_coarse_nav_try_load)
         end
         return true
     end)
