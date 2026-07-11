@@ -50,6 +50,12 @@
 	<string id="dft_msg_cannot_travel_here">
 		<text>Cannot fast travel here.</text>
 	</string>
+	<string id="dft_msg_hostiles_nearby">
+		<text>Hostiles within %dm ambush range - deal with them before traveling.</text>
+	</string>
+	<string id="dft_msg_transition_combat_blocked">
+		<text>You can't cross the border with enemies on you - lose them first!</text>
+	</string>
 
 	<!-- Journey end - one full message per result (script picks a single id) -->
 	<string id="dft_msg_journey_cancelled">

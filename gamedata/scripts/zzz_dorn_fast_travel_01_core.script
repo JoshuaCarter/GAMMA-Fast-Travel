@@ -232,8 +232,13 @@ _G.dft_arrival = {
 
 -- Tarkov Transitions guard (09_transition_guard / 10_transition_compat):
 -- combat block, post-load arrival suppress (via Tarkov zone checks), min countdown.
+-- Native level_changer lock polling uses scan_interval_ms / buffer_m below.
 _G.dft_transition_guard = {
-    min_countdown_s = 5, -- floor on tarkov_transitions_mcm duration
+    min_countdown_s    = 5,   -- floor on tarkov_transitions_mcm duration
+    scan_interval_ms   = 150, -- combat lock poll interval
+    buffer_m           = 12,  -- door proximity for combat-block message
+    search_pad_m       = 15,  -- extra door search radius for that message
+    msg_cooldown_s     = 5,   -- throttle combat-block message repeats
 }
 
 _G.dft_path = {

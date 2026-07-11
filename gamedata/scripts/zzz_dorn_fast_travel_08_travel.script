@@ -8,7 +8,7 @@
 local dft = _G.dft
 -- Forward declarations for this file's private (non-exported) helpers, so they can
 -- reference each other regardless of definition order below.
-local apply_final_stats, cancel_journey_emission, complete_travel_sequence, detect_ambush, force_end_surge, get_surge_manager, is_emission_active, journey_path_ratio, plan_emission_interrupt, play_fade_teleport, seconds_until_surge, should_emission_interrupt, trigger_emission_interrupt, trigger_encounter, update_sneak_cooldown_hud
+local apply_final_stats, cancel_journey_emission, complete_travel_sequence, detect_ambush, enforce_transition_combat_lock, force_end_surge, get_surge_manager, is_emission_active, journey_path_ratio, plan_emission_interrupt, play_fade_teleport, seconds_until_surge, should_emission_interrupt, trigger_emission_interrupt, trigger_encounter, update_sneak_cooldown_hud
 local PP_FADE_ID = 22301
 local FADE_TELEPORT_DELAY_S = 0.5
 local TELEPORT_INVULN_S = 1.0
@@ -88,7 +88,7 @@ local function start_travel_sequence(pos, lvid, gvid, is_transition, final_gvid)
     local actor_lid_start = dft_actor_level_id()
     local start_targets = dft_collect_hostiles_at(db.actor:position(), start_radius, actor_lid_start)
     if #start_targets.squads > 0 or #start_targets.npcs > 0 then
-        return fail_start()
+        return fail_start(string.format(dft_str("dft_msg_hostiles_nearby"), math.floor(start_radius + 0.5)), "warning")
     end
 
     local gg = game_graph()
@@ -504,6 +504,52 @@ end
 -- ============================================================
 -- 6. Update Loop
 -- ============================================================
+enforce_transition_combat_lock = function()
+    local cfg = _G.dft_config
+    if cfg and cfg.block_transition_in_combat == false then
+        if dft._transition_locked then
+            dft_set_current_level_changers_locked(false)
+            dft._transition_locked = false
+        end
+        return
+    end
+    -- Mid fast-travel journey the actor's real position is teleport-managed elsewhere; the
+    -- zone-exit arrival itself syncs the lock directly (see complete_travel_sequence).
+    if dft.is_traveling then return end
+    if not (db.actor and db.actor:alive()) then return end
+
+    local tg = time_global()
+    local guard = _G.dft_transition_guard or {}
+    local interval = guard.scan_interval_ms or 150
+    if dft._transition_guard_next and tg < dft._transition_guard_next then return end
+    dft._transition_guard_next = tg + interval
+
+    local actor_pos = db.actor:position()
+    local radius = dft_ambush_radius_m(false)
+    local alerted, enemy_dist = dft_alerted_enemy_within(actor_pos, radius)
+
+    if alerted ~= dft._transition_locked then
+        dft_set_current_level_changers_locked(alerted)
+        dft._transition_locked = alerted
+        dft_log("Transition lock %s (nearest alerted enemy: %s).",
+            alerted and "ENGAGED - border crossings disabled" or "RELEASED - crossings re-enabled",
+            alerted and (tostring(enemy_dist) .. "m") or "none within " .. math.floor(radius) .. "m")
+    end
+
+    if alerted then
+        local buffer_m = guard.buffer_m or 12
+        local search_pad_m = guard.search_pad_m or 15
+        local _, door_dist = dft_nearest_transition_point(actor_pos, buffer_m + search_pad_m)
+        if door_dist and door_dist <= buffer_m then
+            local msg_cooldown_ms = (guard.msg_cooldown_s or 5) * 1000
+            if not dft._transition_guard_last_msg or (tg - dft._transition_guard_last_msg) > msg_cooldown_ms then
+                dft._transition_guard_last_msg = tg
+                dft_msg(dft_str("dft_msg_transition_combat_blocked"), "danger")
+            end
+        end
+    end
+end
+
 local function actor_on_update()
     local tg_ui = time_global()
     if not dft._last_ambush_range_sync or (tg_ui - dft._last_ambush_range_sync) > 500 then
@@ -515,6 +561,8 @@ local function actor_on_update()
         dft._last_sneak_cd_ui_tick = tg_ui
         pcall(update_sneak_cooldown_hud)
     end
+
+    pcall(enforce_transition_combat_lock)
 
     if dft.is_traveling and emission_started_unexpectedly() then
         cancel_journey_emission()
@@ -718,6 +766,15 @@ complete_travel_sequence = function()
     local final_pos, final_lvid
     if dft.is_transition then
         final_pos, final_lvid = dft_find_ground_pos(dft.dest_raw_pos or dft.dest_pos, dft.dest_lvid, dft.dest_gvid)
+        if final_pos then
+            local alerted = dft_alerted_enemy_within(final_pos, dft_ambush_radius_m(false))
+            dft_set_current_level_changers_locked(alerted)
+            dft._transition_locked = alerted
+            if alerted then
+                dft_log("Transition arrival: alerted enemy nearby - exit locked at (%.1f,%.1f,%.1f).",
+                    final_pos.x, final_pos.y, final_pos.z)
+            end
+        end
         if final_pos then
             dft_log("Transition Teleport: pos=(%f, %f, %f)", final_pos.x, final_pos.y, final_pos.z)
         end
