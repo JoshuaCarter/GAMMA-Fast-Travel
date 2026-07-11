@@ -43,7 +43,6 @@ local function clear()
 
     -- v2.0.8: Reset runtime travel flag (closes double-click race window)
     dft.is_traveling = false
-    dft._transition_force_zone_scan = true
     dft_set_fft_trip_in_progress(false)
     dft.ambush_pending = false
     dft.ambush_stop_ratio = nil

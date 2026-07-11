@@ -230,21 +230,10 @@ _G.dft_arrival = {
     reroute_max = 10,
 }
 
--- Zone-transition combat lock: hard-disables every level transition trigger on the current
--- level (native engine flag via game_object:enable_level_changer - not a position clamp) while
--- an alerted enemy is actively engaging the actor within ambush range. Applies regardless of
--- how the actor got there - on foot, or just dropped off at a zone exit by this mod's own fast
--- travel - and regardless of where on the level they're standing. Reuses dft_ambush_radius_m
--- for the "is anyone alerted nearby" range so it's already forgiving at night/in bad weather,
--- same as every other ambush check in this mod.
+-- Tarkov Transitions guard (09_transition_guard / 10_transition_compat):
+-- combat block, post-load arrival suppress (via Tarkov zone checks), min countdown.
 _G.dft_transition_guard = {
-    buffer_m              = 12, -- how close to a door counts as "near it" for the on-screen warning
-    search_pad_m          = 15, -- extra search radius added on top of buffer_m when locating that door
-    scan_interval_ms      = 150,
-    msg_cooldown_s        = 5,
-    zone_scan_interval_ms = 100, -- how often to re-test exit-zone membership
-    countdown_duration_s  = 3,   -- full timer value; crossings unlock only at 0
-    trigger_radius_m      = 10,  -- radius around an exit that counts as "in zone"
+    min_countdown_s = 5, -- floor on tarkov_transitions_mcm duration
 }
 
 _G.dft_path = {

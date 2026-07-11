@@ -8,7 +8,7 @@
 local dft = _G.dft
 -- Forward declarations for this file's private (non-exported) helpers, so they can
 -- reference each other regardless of definition order below.
-local apply_final_stats, cancel_journey_emission, complete_travel_sequence, detect_ambush, enforce_transition_combat_lock, force_end_surge, get_surge_manager, is_emission_active, journey_path_ratio, plan_emission_interrupt, play_fade_teleport, seconds_until_surge, should_emission_interrupt, trigger_emission_interrupt, trigger_encounter, update_sneak_cooldown_hud
+local apply_final_stats, cancel_journey_emission, complete_travel_sequence, detect_ambush, force_end_surge, get_surge_manager, is_emission_active, journey_path_ratio, plan_emission_interrupt, play_fade_teleport, seconds_until_surge, should_emission_interrupt, trigger_emission_interrupt, trigger_encounter, update_sneak_cooldown_hud
 local PP_FADE_ID = 22301
 local FADE_TELEPORT_DELAY_S = 0.5
 local TELEPORT_INVULN_S = 1.0
@@ -88,7 +88,7 @@ local function start_travel_sequence(pos, lvid, gvid, is_transition, final_gvid)
     local actor_lid_start = dft_actor_level_id()
     local start_targets = dft_collect_hostiles_at(db.actor:position(), start_radius, actor_lid_start)
     if #start_targets.squads > 0 or #start_targets.npcs > 0 then
-        return fail_start(string.format(dft_str("dft_msg_hostiles_nearby"), math.floor(start_radius + 0.5)), "warning")
+        return fail_start()
     end
 
     local gg = game_graph()
@@ -502,48 +502,6 @@ update_sneak_cooldown_hud = function()
 end
 
 -- ============================================================
--- Zone-transition combat lock
--- ============================================================
--- Runs continuously (not just during a fast-travel journey) so it covers walking up to a real
--- level changer under fire just as much as it covers the moment this mod's own zone-exit
--- journey drops the actor off next to one. While an alerted enemy is actively engaging the
--- actor within ambush range, every transition trigger on the current level is hard-disabled
--- at the engine level (see dft_set_current_level_changers_locked) - touching one then does
--- nothing at all, no matter where the actor is standing or how they got there. Once nothing
--- is actively hunting the actor (or they back off out of ambush range), the lock lifts and
--- crossings work normally again.
-enforce_transition_combat_lock = function()
-    -- Level-changer lock/unlock is owned entirely by dft_tick_transition_countdown.
-    -- Keep only the optional proximity warning when combat blocks a manual approach.
-    local cfg = _G.dft_config
-    if cfg and cfg.block_transition_in_combat == false then return end
-    if dft.is_traveling then return end
-    if not (db.actor and db.actor:alive()) then return end
-
-    local tg = time_global()
-    local guard = _G.dft_transition_guard or {}
-    local interval = guard.scan_interval_ms or 150
-    if dft._transition_guard_next and tg < dft._transition_guard_next then return end
-    dft._transition_guard_next = tg + interval
-
-    local actor_pos = db.actor:position()
-    local radius = dft_ambush_radius_m(false)
-    local alerted = dft_alerted_enemy_within(actor_pos, radius)
-    if not alerted then return end
-
-    local buffer_m = guard.buffer_m or 12
-    local search_pad_m = guard.search_pad_m or 15
-    local _, door_dist = dft_nearest_transition_point(actor_pos, buffer_m + search_pad_m)
-    if door_dist and door_dist <= buffer_m then
-        local msg_cooldown_ms = (guard.msg_cooldown_s or 5) * 1000
-        if not dft._transition_guard_last_msg or (tg - dft._transition_guard_last_msg) > msg_cooldown_ms then
-            dft._transition_guard_last_msg = tg
-            dft_msg(dft_str("dft_msg_transition_combat_blocked"), "danger")
-        end
-    end
-end
-
--- ============================================================
 -- 6. Update Loop
 -- ============================================================
 local function actor_on_update()
@@ -557,13 +515,6 @@ local function actor_on_update()
         dft._last_sneak_cd_ui_tick = tg_ui
         pcall(update_sneak_cooldown_hud)
     end
-
-    local ok_tick, tick_err = pcall(dft_tick_transition_countdown)
-    if not ok_tick and not dft._transition_tick_err_logged then
-        dft._transition_tick_err_logged = true
-        printf("[DFT-TRANS] tick error: %s", tostring(tick_err))
-    end
-    pcall(enforce_transition_combat_lock)
 
     if dft.is_traveling and emission_started_unexpectedly() then
         cancel_journey_emission()

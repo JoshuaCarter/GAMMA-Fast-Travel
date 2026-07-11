@@ -38,9 +38,6 @@
 	<string id="dft_msg_too_close">
 		<text>Destination is too close.</text>
 	</string>
-	<string id="dft_msg_hostiles_nearby">
-		<text>Hostiles within %dm ambush range - deal with them before traveling.</text>
-	</string>
 	<string id="dft_msg_emission_active">
 		<text>Cannot travel during an emission.</text>
 	</string>
@@ -52,9 +49,6 @@
 	</string>
 	<string id="dft_msg_cannot_travel_here">
 		<text>Cannot fast travel here.</text>
-	</string>
-	<string id="dft_msg_transition_combat_blocked">
-		<text>You can't cross the border with enemies on you - lose them first!</text>
 	</string>
 
 	<!-- Journey end - one full message per result (script picks a single id) -->
@@ -99,14 +93,4 @@
 		<text>Sneak cooldown: %s</text>
 	</string>
 
-	<!-- Zone-exit transition countdown HUD -->
-	<string id="dft_hud_transition_countdown">
-		<text>Traveling to %s in %s</text>
-	</string>
-	<string id="dft_hud_transition_countdown_prefix">
-		<text>Traveling to %s in </text>
-	</string>
-	<string id="dft_hud_transition_combat_blocked">
-		<text>Cannot travel while in combat</text>
-	</string>
 </string_table>
