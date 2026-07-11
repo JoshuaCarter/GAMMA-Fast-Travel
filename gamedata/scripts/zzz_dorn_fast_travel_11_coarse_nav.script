@@ -9,6 +9,9 @@ local CN_BUILD_MAX_NODES = 2500
 local CN_SPLICE_MAX_M = 72
 local CN_CONNECTOR_MAX_M = 50
 local CN_CAMPFIRE_MIN_CORE_M = 50
+local CN_JUNCTION_SNAP_M = 18
+local CN_SNAP_TRIVIAL_M = 3
+local CN_SNAP_GRID_M = 15
 local CN_UNDERGROUND_Y = 100
 local CN_CACHE_SUBDIR = "dft_coarse_nav\\"
 
@@ -353,6 +356,7 @@ local function cn_graph_new()
         adj = {},
         node_by_key = {},
         anchor_by_key = {},
+        snap_cells = {},
         next_id = 1,
     }
 end
@@ -360,6 +364,98 @@ end
 local function cn_graph_node_by_id(g, id)
     for i = 1, #g.nodes do
         if g.nodes[i].id == id then return g.nodes[i] end
+    end
+    return nil
+end
+
+local function cn_snap_cell_key(x, z)
+    return math.floor(x / CN_SNAP_GRID_M) .. ":" .. math.floor(z / CN_SNAP_GRID_M)
+end
+
+local function cn_snap_cell_add(g, node_id, x, z)
+    if not (g and node_id and x and z) then return end
+    g.snap_cells = g.snap_cells or {}
+    local key = cn_snap_cell_key(x, z)
+    local cell = g.snap_cells[key]
+    if not cell then
+        g.snap_cells[key] = { node_id }
+        return
+    end
+    for i = 1, #cell do
+        if cell[i] == node_id then return end
+    end
+    cell[#cell + 1] = node_id
+end
+
+local function cn_rebuild_snap_cells(g)
+    if not g then return end
+    g.snap_cells = {}
+    for i = 1, #g.nodes do
+        local n = g.nodes[i]
+        if not n.anchor_key then
+            cn_snap_cell_add(g, n.id, n.x, n.z)
+        end
+    end
+end
+
+-- Nearby junction ids from spatial cells only (no full-graph scan).
+local function cn_snap_candidates(g, pos, radius_m)
+    if not (g and pos and pos.x) then return {} end
+    g.snap_cells = g.snap_cells or {}
+    radius_m = radius_m or CN_JUNCTION_SNAP_M
+    local step = CN_SNAP_GRID_M
+    local gx = math.floor(pos.x / step)
+    local gz = math.floor(pos.z / step)
+    local ring = math.ceil(radius_m / step)
+    local out, seen = {}, {}
+    for dx = -ring, ring do
+        for dz = -ring, ring do
+            local cell = g.snap_cells[(gx + dx) .. ":" .. (gz + dz)]
+            if cell then
+                for i = 1, #cell do
+                    local id = cell[i]
+                    if not seen[id] then
+                        seen[id] = true
+                        out[#out + 1] = id
+                    end
+                end
+            end
+        end
+    end
+    return out
+end
+
+local function cn_can_snap_to_junction(pos, n)
+    if not (pos and n) then return false end
+    local np = vector():set(n.x, n.y, n.z)
+    local d = cn_horizontal_dist(pos, np) or pos:distance_to(np)
+    if not d or d > CN_JUNCTION_SNAP_M then return false end
+    if d <= CN_SNAP_TRIVIAL_M then return true end
+    return cn_mesh_line_reachable(pos, np)
+end
+
+local function cn_find_snap_junction(g, pos)
+    local candidates = cn_snap_candidates(g, pos, CN_JUNCTION_SNAP_M)
+    if #candidates == 0 then return nil end
+
+    local ranked = {}
+    for i = 1, #candidates do
+        local n = cn_graph_node_by_id(g, candidates[i])
+        if n and not n.anchor_key then
+            local np = vector():set(n.x, n.y, n.z)
+            local d = cn_horizontal_dist(pos, np) or pos:distance_to(np)
+            if d and d <= CN_JUNCTION_SNAP_M then
+                ranked[#ranked + 1] = { id = n.id, d = d, n = n }
+            end
+        end
+    end
+    if #ranked == 0 then return nil end
+    table.sort(ranked, function(a, b) return a.d < b.d end)
+
+    for i = 1, #ranked do
+        if cn_can_snap_to_junction(pos, ranked[i].n) then
+            return ranked[i].id
+        end
     end
     return nil
 end
@@ -381,12 +477,8 @@ local function cn_graph_add_node(g, pos, lvid, kind, anchor_key)
             end
         end
     else
-        local key = cn_node_key(pos.x, pos.z)
-        local existing_id = g.node_by_key[key]
-        if existing_id then
-            local n = cn_graph_node_by_id(g, existing_id)
-            if n and not n.anchor_key then return existing_id end
-        end
+        local snap_id = cn_find_snap_junction(g, pos)
+        if snap_id then return snap_id end
     end
 
     local id = g.next_id
@@ -403,6 +495,7 @@ local function cn_graph_add_node(g, pos, lvid, kind, anchor_key)
         g.anchor_by_key[anchor_key] = id
     else
         g.node_by_key[cn_node_key(pos.x, pos.z)] = id
+        cn_snap_cell_add(g, id, pos.x, pos.z)
     end
     g.adj[id] = g.adj[id] or {}
     return id
@@ -498,6 +591,7 @@ end
 local function cn_finalize_graph(g)
     if not g then return end
     cn_graph_rebuild_adj(g)
+    cn_rebuild_snap_cells(g)
     cn_build_direct_dests(g)
 end
 
@@ -566,6 +660,15 @@ local function cn_nearest_graph_node(g, pos, max_m)
     if not (g and pos and pos.x) then return nil end
     max_m = max_m or 40
     local best_id, best_d = nil, max_m
+    for _, id in ipairs(cn_snap_candidates(g, pos, max_m)) do
+        local n = cn_graph_node_by_id(g, id)
+        if n then
+            local p = vector():set(n.x, n.y, n.z)
+            local d = cn_horizontal_dist(pos, p) or pos:distance_to(p)
+            if d and d < best_d then best_d = d; best_id = n.id end
+        end
+    end
+    if best_id then return best_id, best_d end
     for i = 1, #g.nodes do
         local n = g.nodes[i]
         local p = vector():set(n.x, n.y, n.z)
