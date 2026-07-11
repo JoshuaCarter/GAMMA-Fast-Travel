@@ -7,7 +7,7 @@ local dft_config = _G.dft_config
 
 -- Forward declarations for this file's private (non-exported) helpers, so they can
 -- reference each other regardless of definition order below.
-local astar_navmesh_path, build_line_snap_path, build_navmesh_path, build_preview_markers, densify_polyline, enforce_ambush_standoff, ensure_graph_spatial_index, get_cached_line_snap_path, graph_near_road_fast, has_nearby_hostiles_at, horizontal_dist, is_pos_safe_from_anomalies, lvid_accessible, lvid_ground_pos, mesh_line_reachable, mesh_step, nearest_dot_index_for_ratio, nearest_hostile_world, nearest_road_node_fast, nearest_accessible_nav_vertex, path_preview_enabled, path_stats_for_target, place_ambush_landing, polyline_length, polyline_pos_at_ratio, ray_snap_ground_pos, smooth_navmesh_chain, squad_community_hostile, valid_lvid
+local astar_navmesh_path, build_line_snap_path, build_navmesh_path, build_path_preview, build_preview_markers, clear_path_preview, densify_polyline, enforce_ambush_standoff, ensure_graph_spatial_index, get_cached_line_snap_path, graph_near_road_fast, has_nearby_hostiles_at, horizontal_dist, is_pos_safe_from_anomalies, lvid_accessible, lvid_ground_pos, mesh_line_reachable, mesh_step, nearest_dot_index_for_ratio, nearest_hostile_world, nearest_road_node_fast, nearest_accessible_nav_vertex, path_preview_enabled, path_stats_for_target, place_ambush_landing, polyline_length, polyline_pos_at_ratio, ray_snap_ground_pos, smooth_navmesh_chain, squad_community_hostile, valid_lvid
 local function lerp_pos(p1, p2, ratio, out)
     if not (p1 and p2 and out) then return end
     out:set(
@@ -2200,7 +2200,6 @@ build_line_snap_path = function(start_pos, dest_pos)
         no_land_segments = { { from_idx = 1, to_idx = 2 } },
         mode = "fallback_straight",
     }
-    store_line_snap_path_cache(start_pos, dest_pos, chain, is_vertex, path_len, chain, fallback_meta)
     return chain, is_vertex, path_len, chain, fallback_meta
 end
 
@@ -2480,9 +2479,14 @@ local function report_map_click(map_table, hint)
         kind, trans_line, path_line
     )
 
-    if not dft.is_traveling and id and id > 0 then
-        if dft.is_path_preview and dft.path_preview_id and dft.path_preview_id ~= id then
-            clear_path_preview()
+    if not dft.is_traveling and id and id > 0 and id ~= 65535 and dft_is_travel_destination(id) then
+        if path_preview_enabled() and dft_preview_eligible then
+            dft.last_menu_target_id = id
+            dft.last_menu_target_ln = ln
+            local can_preview, preview_lc = dft_preview_eligible(id, se_obj, ln)
+            if can_preview then
+                pcall(function() build_path_preview(id, preview_lc) end)
+            end
         end
     end
 end

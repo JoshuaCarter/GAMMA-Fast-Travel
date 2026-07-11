@@ -8,7 +8,7 @@
 local dft = _G.dft
 -- Forward declarations for this file's private (non-exported) helpers, so they can
 -- reference each other regardless of definition order below.
-local apply_final_stats, cancel_journey_emission, complete_travel_sequence, detect_ambush, enforce_transition_combat_lock, force_end_surge, get_surge_manager, is_emission_active, journey_path_ratio, plan_emission_interrupt, play_fade_teleport, seconds_until_surge, should_emission_interrupt, trigger_emission_interrupt, trigger_encounter, update_sneak_cooldown_hud
+local apply_final_stats, cancel_journey_emission, check_and_skip_surges, cleanup_dots, close_pda_for_travel, complete_travel_sequence, detect_ambush, enforce_transition_combat_lock, force_end_surge, get_surge_manager, is_emission_active, is_safety_active, journey_path_ratio, plan_emission_interrupt, play_ambush_alert, play_fade_teleport, seconds_until_surge, set_safety_active, should_emission_interrupt, stop_travel_logic, teleport_companions, trigger_emission_interrupt, trigger_encounter, update_sneak_cooldown_hud
 local PP_FADE_ID = 22301
 local FADE_TELEPORT_DELAY_S = 0.5
 local TELEPORT_INVULN_S = 1.0
@@ -125,6 +125,9 @@ local function start_travel_sequence(pos, lvid, gvid, is_transition, final_gvid)
     dft.start_pos:set(ap.x, ap.y, ap.z)
 
     dft_clear_path_preview()
+
+    -- Drop any stale failed-straight preview cache so journey rebuilds the real navmesh path.
+    dft.path_build_cache = nil
 
     local straight_dist = dft_distance_pda(dft.start_pos, dft.dest_pos) or dft.start_pos:distance_to(dft.dest_pos)
     local path_len = straight_dist
@@ -334,7 +337,7 @@ local function is_pda_map_shown()
     return shown
 end
 
-local function close_pda_for_travel()
+close_pda_for_travel = function()
     pcall(function()
         if ActorMenu and ActorMenu.get_pda_menu then
             local pda = ActorMenu.get_pda_menu()
@@ -428,7 +431,7 @@ force_end_surge = function(manager)
     pcall(function() manager._delta = 6 * 3600 end)  -- 6 hours until next surge
 end
 
-local function check_and_skip_surges()
+check_and_skip_surges = function()
     -- Surge Manager
     if surge_manager and surge_manager.get_surge_manager then
         local sm = surge_manager.get_surge_manager()
@@ -442,7 +445,7 @@ local function check_and_skip_surges()
     end
 end
 
-local function set_safety_active(duration)
+set_safety_active = function(duration)
     dft.safety_until = time_global() + (duration * 1000)
     dft_log("SAFETY WINDOW ACTIVATED: %d seconds", duration)
 
@@ -460,7 +463,7 @@ local function set_safety_active(duration)
     end
 end
 
-local function is_safety_active()
+is_safety_active = function()
     if dft.is_traveling then return true end
     return dft.safety_until and dft.safety_until > time_global()
 end
@@ -920,7 +923,7 @@ end
 
 -- Short PDA error/alarm blip (not a siren) - a heads-up that something found you,
 -- whether that's a mid-journey ambush or the "unavoidable" one waiting at the destination.
-local function play_ambush_alert()
+play_ambush_alert = function()
     pcall(function()
         xr_sound.set_sound_play(db.actor:id(), "pda_alarm")
     end)
@@ -992,12 +995,12 @@ apply_final_stats = function(time_ratio)
     dft_log("Survival drain: %.3f/stat over %.2fh (ratio %.2f)", drain, hours, time_ratio)
 end
 
-local function stop_travel_logic()
+stop_travel_logic = function()
     dft.is_traveling = false
     dft_set_fft_trip_in_progress(false)
 end
 
-local function cleanup_dots()
+cleanup_dots = function()
     for _, id in pairs(dft.dot_ids) do
         dft_remove_path_spots(id)
         pcall(function()
@@ -1120,7 +1123,7 @@ trigger_encounter = function()
     end
 end
 
-local function teleport_companions(pos, lvid, gvid)
+teleport_companions = function(pos, lvid, gvid)
     if not (axr_companions and axr_companions.list_actor_squad_by_id) then return end
 
     local companion_ids = axr_companions.list_actor_squad_by_id()
