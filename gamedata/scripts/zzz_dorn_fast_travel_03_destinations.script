@@ -33,8 +33,8 @@ end
 -- on native level_changers, or sr_level_changer in spawn ini on restrictors).
 local function get_level_changer_spot(id)
     if not id then return nil end
-    for i = 1, #dft_spots.level_changer do
-        local spot = dft_spots.level_changer[i]
+    for i = 1, #spots.level_changer do
+        local spot = spots.level_changer[i]
         if level.map_has_object_spot(id, spot) ~= 0 then
             return spot
         end
@@ -194,23 +194,23 @@ local function transition_dest_label_for_door(door_id)
 end
 
 is_campfire_spot = function(id)
-    return map_has_any_spot(id, dft_spots.campfire)
+    return map_has_any_spot(id, spots.campfire)
 end
 
 local function collect_object_spots(id)
-    local spots = {}
-    if not (id and level) then return spots end
+    local found = {}
+    if not (id and level) then return found end
     local names = {}
-    for i = 1, #dft_spots.level_changer do names[#names + 1] = dft_spots.level_changer[i] end
-    for i = 1, #dft_spots.campfire do names[#names + 1] = dft_spots.campfire[i] end
+    for i = 1, #spots.level_changer do names[#names + 1] = spots.level_changer[i] end
+    for i = 1, #spots.campfire do names[#names + 1] = spots.campfire[i] end
     local extra = { "fast_travel", "primary_object", "green_location", "treasure", "anombp" }
     for i = 1, #extra do names[#names + 1] = extra[i] end
     for i = 1, #names do
         if level.map_has_object_spot(id, names[i]) ~= 0 then
-            spots[#spots + 1] = names[i]
+            found[#found + 1] = names[i]
         end
     end
-    return spots
+    return found
 end
 
 local function vec_str(v)
