@@ -1057,25 +1057,26 @@ local function cn_parse_lvid_token(lvid_s)
 end
 
 local function cn_save_graph(g)
+    local tostr = tostring
     local path = cn_cache_disk_path(g.level_name)
     if not path then
-        cn_log("save failed: no mod write path (script source=%s)", tostring(CN_SCRIPT_SOURCE))
+        cn_log("save failed: no mod write path (script source=%s)", tostr(CN_SCRIPT_SOURCE))
         return false
     end
     local f = io.open(path, "w")
     if not f then cn_log("save failed: io.open %s", path); return false end
-    f:write("DFT_COARSE_V" .. tostring(CN_SCHEMA) .. "\n")
-    f:write("level_name=" .. tostring(g.level_name) .. "\n")
-    f:write("level_id=" .. tostring(g.level_id or "") .. "\n")
-    f:write("anchor_hash=" .. tostring(g.anchor_hash) .. "\n")
-    f:write("nodes=" .. tostring(#g.nodes) .. "\n")
+    f:write("DFT_COARSE_V" .. tostr(CN_SCHEMA) .. "\n")
+    f:write("level_name=" .. tostr(g.level_name) .. "\n")
+    f:write("level_id=" .. tostr(g.level_id or "") .. "\n")
+    f:write("anchor_hash=" .. tostr(g.anchor_hash) .. "\n")
+    f:write("nodes=" .. tostr(#g.nodes) .. "\n")
     for i = 1, #g.nodes do
         local n = g.nodes[i]
         f:write(string.format("N %d %s %.3f %.3f %.3f %s %s\n",
             n.id, n.kind or "junction", n.x, n.y, n.z,
-            cn_lvid_token(n.lvid), tostring(n.anchor_key or "")))
+            cn_lvid_token(n.lvid), tostr(n.anchor_key or "")))
     end
-    f:write("edges=" .. tostring(#g.edges) .. "\n")
+    f:write("edges=" .. tostr(#g.edges) .. "\n")
     for i = 1, #g.edges do
         local e = g.edges[i]
         f:write(string.format("E %d %d %.2f\n", e.from_id, e.to_id, e.cost_m or 0))
