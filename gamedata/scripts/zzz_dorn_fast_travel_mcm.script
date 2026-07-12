@@ -43,7 +43,7 @@ function on_mcm_load()
 						def = false,
 						hint = "dorn_fast_travel_show_ambush_range",
 					},
-				},
+				}),
 			},
 			{
 				id = "development",
@@ -87,7 +87,7 @@ function on_mcm_load()
 						def = -1,
 						hint = "dorn_fast_travel_coarse_nav_build",
 					},
-				},
+				}),
 			},
 		},
 	}
