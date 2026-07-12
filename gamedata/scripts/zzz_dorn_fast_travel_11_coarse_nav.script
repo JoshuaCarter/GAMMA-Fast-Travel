@@ -13,7 +13,9 @@ local CN_JUNCTION_SNAP_M = 18
 local CN_SNAP_TRIVIAL_M = 3
 local CN_SNAP_GRID_M = 15
 local CN_UNDERGROUND_Y = 100
-local CN_CACHE_SUBDIR = "dft_coarse_nav\\"
+local CN_MOD_SCRIPT = "zzz_dorn_fast_travel_11_coarse_nav.script"
+local CN_CACHE_VFS_DIR = "dft_coarse_nav\\"
+local CN_SCRIPT_SOURCE = debug.getinfo(1, "S") and debug.getinfo(1, "S").source
 
 local cn_path = {
     nav_step_m = 22,
@@ -530,7 +532,8 @@ local function cn_graph_rebuild_adj(g)
 end
 
 -- Per-node lookup: which destination anchors are reachable without crossing another anchor.
--- Example a->b->c: junctions on a-b know {a,b} only; junctions on b-c know {b,c} only.
+-- Built by unioning one BFS per anchor (anchors are barriers). A junction on a-b has {a,b};
+-- it gains {c} only when a new path splices in and c becomes directly reachable without via b.
 local function cn_graph_is_anchor(g, node_id)
     local n = cn_graph_node_by_id(g, node_id)
     return n and n.anchor_key ~= nil
@@ -989,21 +992,59 @@ end
 
 -- ============================================================
 -- File I/O
+-- Load: engine VFS ($game_config$/dft_coarse_nav/*.cng) — install/MO2 agnostic.
+-- Save: io.open to this script's mod folder (debug.getinfo source path only).
 -- ============================================================
 
-local function cn_cache_dir()
-    if not getFS then return nil end
-    local base = getFS():update_path("$game_config$", "")
-    if not base or base == "" then return nil end
-    local dir = base .. CN_CACHE_SUBDIR
-    pcall(function() os.execute('mkdir "' .. dir:gsub("/", "\\") .. '" 2>nul') end)
-    return dir
+local function cn_io_path_exists(path)
+    local f = io.open(path, "r")
+    if f then f:close() return true end
+    return false
 end
 
-local function cn_cache_path(level_name)
-    local dir = cn_cache_dir()
-    if not dir then return nil end
-    return dir .. (level_name or "unknown") .. "_v" .. tostring(CN_SCHEMA) .. ".cng"
+local function cn_cache_vfs_path(level_name)
+    return CN_CACHE_VFS_DIR .. (level_name or "unknown") .. "_v" .. tostring(CN_SCHEMA) .. ".cng"
+end
+
+local function cn_vfs_read_text(vfs_path)
+    if not getFS then return nil end
+    local fr = getFS():r_open("$game_config$", vfs_path)
+    if not fr then return nil end
+    local s = ""
+    while not fr:r_eof() do
+        s = s .. string.char(fr:r_u8())
+    end
+    return (s ~= "") and s or nil
+end
+
+local function cn_mod_cache_dir_from_source(source)
+    if not source then return nil end
+    source = source:gsub("^@", ""):gsub("/", "\\")
+    if not source:match("^%a:[\\/]") and not source:match("^\\\\") then
+        return nil
+    end
+    local tail = "gamedata\\scripts\\" .. CN_MOD_SCRIPT
+    if not source:lower():find(tail:lower(), 1, true) then return nil end
+    return source:sub(1, #source - #tail) .. "gamedata\\configs\\dft_coarse_nav\\"
+end
+
+local function cn_mod_script_path(cache_dir)
+    return cache_dir:gsub("gamedata\\configs\\dft_coarse_nav\\",
+        "gamedata\\scripts\\") .. CN_MOD_SCRIPT
+end
+
+local CN_MOD_CACHE_DIR = (function()
+    local dir = cn_mod_cache_dir_from_source(CN_SCRIPT_SOURCE)
+    if dir and cn_io_path_exists(cn_mod_script_path(dir)) then
+        pcall(function() os.execute('mkdir "' .. dir:gsub("/", "\\") .. '" 2>nul') end)
+        return dir
+    end
+    return nil
+end)()
+
+local function cn_cache_disk_path(level_name)
+    if not CN_MOD_CACHE_DIR then return nil end
+    return CN_MOD_CACHE_DIR .. (level_name or "unknown") .. "_v" .. tostring(CN_SCHEMA) .. ".cng"
 end
 
 local function cn_lvid_token(lvid)
@@ -1016,8 +1057,11 @@ local function cn_parse_lvid_token(lvid_s)
 end
 
 local function cn_save_graph(g)
-    local path = cn_cache_path(g.level_name)
-    if not path then cn_log("save failed: no mod cache path"); return false end
+    local path = cn_cache_disk_path(g.level_name)
+    if not path then
+        cn_log("save failed: no mod write path (script source=%s)", tostring(CN_SCRIPT_SOURCE))
+        return false
+    end
     local f = io.open(path, "w")
     if not f then cn_log("save failed: io.open %s", path); return false end
     f:write("DFT_COARSE_V" .. tostring(CN_SCHEMA) .. "\n")
@@ -1042,14 +1086,12 @@ local function cn_save_graph(g)
 end
 
 local function cn_load_graph(level_name)
-    local path = cn_cache_path(level_name)
-    if not path then return nil end
-    local f = io.open(path, "r")
-    if not f then return nil end
+    local vfs_path = cn_cache_vfs_path(level_name)
+    local text = cn_vfs_read_text(vfs_path)
+    if not text then return nil end
     local g = cn_graph_new()
     g.level_name = level_name
-    local section = nil
-    for line in f:lines() do
+    for line in text:gmatch("[^\r\n]+") do
         if line:sub(1, 2) == "N " then
             local id, kind, x, y, z, lvid_s, anchor_key = line:match(
                 "^N (%d+) (%S+) ([%-%.%d]+) ([%-%.%d]+) ([%-%.%d]+) (%S+) (.*)$")
@@ -1085,10 +1127,9 @@ local function cn_load_graph(level_name)
             g.anchor_hash = line:match("^anchor_hash=(.+)$")
         end
     end
-    f:close()
     cn_finalize_graph(g)
     if #g.nodes < 1 then return nil end
-    cn_log("loaded %d nodes, %d edges from %s", #g.nodes, #g.edges, path)
+    cn_log("loaded %d nodes, %d edges from $game_config$/%s", #g.nodes, #g.edges, vfs_path)
     return g
 end
 
@@ -1140,6 +1181,8 @@ local function cn_build_step()
             chain = cn_subsample_chain(chain, CN_SUBSAMPLE_M)
             cn_graph_ingest_chain(st.graph, chain, job.from.kind, job.to.kind,
                 job.from.key, job.to.key, job.from.pos, job.to.pos)
+            -- Re-derive direct-dest sets: snap-merge may attach new edges to existing nodes.
+            cn_build_direct_dests(st.graph)
         else
             st.failed[#st.failed + 1] = job
             cn_log("build pair FAILED: %s -> %s", job.from.key, job.to.key)
