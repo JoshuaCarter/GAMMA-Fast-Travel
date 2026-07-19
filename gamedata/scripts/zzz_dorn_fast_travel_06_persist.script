@@ -46,8 +46,10 @@ local function clear()
     dft_set_fft_trip_in_progress(false)
     dft.ambush_pending = false
     dft.ambush_stop_ratio = nil
+    dft.ambush_kind = nil
     dft.journey_start_health = nil
     if dft_clear_ambush_range_circle then dft_clear_ambush_range_circle() end
+    -- Keep ambush dir minimap pin alive across clear(); its own timer removes it.
     -- NOTE: target_stamina deliberately survives clear() - it needs to keep holding
     -- through the post-arrival safety window (up to ~90s after the journey itself ends).
     -- It only resets at the start of the next journey (dft_start_travel_sequence).

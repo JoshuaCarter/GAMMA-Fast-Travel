@@ -1,4 +1,5 @@
--- Dorn's Fast Travel: inject custom PDA path dot map spot
+-- Dorn's Fast Travel: inject custom PDA path / ambush map spots.
+-- File is an Anomaly #include fragment (multiple top-level elements).
 function on_xml_read()
 	RegisterScriptCallback("on_xml_read", function(xml_file_name, xml_obj)
 		if xml_file_name == [[ui\map_spots.xml]]

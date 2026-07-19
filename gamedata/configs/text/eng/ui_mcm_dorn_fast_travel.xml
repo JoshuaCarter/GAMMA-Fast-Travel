@@ -15,13 +15,13 @@
 		<text>Block Zone Transitions in Combat</text>
 	</string>
 	<string id="ui_mcm_dorn_fast_travel_block_transition_in_combat_desc">
-		<text>Prevents crossing a level transition (on foot or via fast travel) while an alerted enemy is actively engaging you within ambush range. On by default.</text>
+		<text>Prevents crossing a level transition (on foot or via fast travel) while an alerted enemy is actively engaging you within your outer ambush range. On by default.</text>
 	</string>
 	<string id="ui_mcm_dorn_fast_travel_show_ambush_range">
 		<text>Show Ambush Range on PDA Map</text>
 	</string>
 	<string id="ui_mcm_dorn_fast_travel_show_ambush_range_desc">
-		<text>Draw a yellow circle on the PDA map for your current ambush detection radius (time, weather, and travel mode). Off by default.</text>
+		<text>Draw two yellow rings on the PDA map for your ambush ranges. Outer = main range (needs line of sight). Inner = 50% of outer (triggers even without line of sight). On ambush, only the ring that caught you turns red. Both scale with time, weather, and travel mode. Off by default.</text>
 	</string>
 	<string id="ui_mcm_dorn_fast_travel_development_section">
 		<text>Development</text>

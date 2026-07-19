@@ -1,5 +1,6 @@
 <!-- Dorn's Fast Travel: path dots on the PDA map (grey = ahead, green = passed,
-     blue = dodged a threat here, red = ambushed here) -->
+     blue = dodged a threat here, red = ambushed here).
+     Anomaly #include fragment: multiple top-level elements are required. -->
 <dft_path_dot>
 	<level_map spot="dft_path_dot_spot"/>
 </dft_path_dot>
@@ -80,3 +81,11 @@
 <dft_ambush_range_ring_spot x="0" y="0" width="6" height="6" alignment="c" stretch="0" scale="1" scale_min="1" scale_max="1.5">
 	<texture a="140" r="255" g="242" b="11" x="633" y="789" width="31" height="31">ui\ui_common</texture>
 </dft_ambush_range_ring_spot>
+
+<!-- Red ring while an ambush is pending / revealed (reverts to yellow after teleport) -->
+<dft_ambush_range_ring_alert>
+	<level_map spot="dft_ambush_range_ring_alert_spot"/>
+</dft_ambush_range_ring_alert>
+<dft_ambush_range_ring_alert_spot x="0" y="0" width="6" height="6" alignment="c" stretch="0" scale="1" scale_min="1" scale_max="1.5">
+	<texture a="180" r="255" g="40" b="40" x="633" y="789" width="31" height="31">ui\ui_common</texture>
+</dft_ambush_range_ring_alert_spot>

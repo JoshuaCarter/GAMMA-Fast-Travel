@@ -2,7 +2,7 @@
 -- Loaded automatically before zzzz_dorn_fast_travel_main.script
 
 -- Mod semver. Coarse-nav cache files key on major.minor only (patch bumps keep cache).
-_G.dft_version = "0.1.0"
+_G.dft_version = "0.3.0"
 
 -- Shared dft globals (Anomaly isolates zzz_* script environments)
 local dft_config = _G.dft_config
@@ -42,8 +42,10 @@ local defaults = {
     pda_check_from      = nil, -- time_global() ms; PDA-closed checks are ignored before this
     ambush_pending      = false, -- true during the brief delay between ambush detection and the actual teleport
     ambush_stop_ratio   = nil,   -- path ratio where a mid-journey ambush froze dot promotion
-    ambush_range_ids    = {},    -- buried device_pda ids forming the PDA ambush-range ring
-    ambush_range_last   = nil,   -- {radius,cx,cz} cache to avoid rebuilding the ring every tick
+    ambush_range_ids    = {},    -- buried device_pda ids forming the PDA ambush-range ring(s)
+    ambush_range_last   = nil,   -- {close_r,los_r,cx,cz,alert_kind} cache to avoid rebuilding every tick
+    ambush_dir_ids      = {},    -- temporary minimap pin(s) pointing at nearest ambusher
+    ambush_kind         = nil,   -- "close" | "los" for the last triggered ambush scan
     journey_start_health = nil, -- actor.health snapshot at journey start; damage cancel compares against this
     target_stamina      = 1.0, -- end-of-travel stamina the post-arrival safety window should hold at
     path_preview_id     = nil,
@@ -196,10 +198,11 @@ _G.dft_hostile = {
 }
 
 _G.dft_ambush = {
-    radius_base        = 60,
+    radius_base        = 60,  -- outer (LOS) ambush range; the main published value
     radius_min         = 20,
     radius_max         = 60,
-    travel_detection_m   = 10,  -- normal travel: +10m ambush detection (sprinting)
+    close_frac         = 0.5, -- inner (no-LOS) band = 50% of outer
+    travel_detection_m   = 10,  -- normal travel: +10m outer ambush detection (sprinting)
     time_twilight_m    = 10,
     time_night_m       = 20,
     weather_rain_m     = 10,
@@ -212,6 +215,7 @@ _G.dft_ambush = {
     offset_max         = 80,
     standoff_min_m     = 20,  -- target horizontal distance from hostiles at ambush landing
     ping_hit_power     = 0.01, -- minimal torso wound from actor (arena-style wakeup)
+    dir_marker_s       = 10,  -- minimap threat-direction pin lifetime after ambush
 }
 
 -- Integer game hours from level.get_time_hours() (0-23).
@@ -258,11 +262,16 @@ _G.dft_path = {
                                      -- real y so it's never visible/reachable in the 3D world -
                                      -- map spots only care about x/z, so this doesn't affect them.
     ambush_range_segments = 32,  -- ring markers approximating ambush radius on the PDA map
+    ambush_range_close_segments = 24, -- inner (close / no-LOS) ring
     ambush_range_spot     = "dft_ambush_range_ring",
+    ambush_range_spot_alert = "dft_ambush_range_ring_alert", -- red on the ring that triggered the ambush
+    ambush_dir_spot       = "dft_path_dot_ambush_icon", -- red waypoint pin toward nearest hostile
     road_on_graph_max_m   = 5,   -- navmesh counts as on-road when this close to a graph node
     preview_edge_spacing_m = 5,
     lc_snap_max_drift_m   = 25,  -- max navmesh snap distance from level changer
     ground_snap_max_drift_m = 60,
+    land_prefer_node_m    = 10,  -- if a coarse path node or fine nav vertex is within this of the
+                                 -- journey point, teleport snaps to the nearer of those
     graph_nearest_max_m   = 50,  -- tight graph lookup for transitions
     menu_click_redirect_off_m = 60,  -- non-dest spot farther than this from click may redirect
     menu_click_transition_near_m = 120, -- find transition doors within this radius of click

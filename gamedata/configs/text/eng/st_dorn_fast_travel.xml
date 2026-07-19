@@ -54,7 +54,7 @@
 		<text>Cannot fast travel here.</text>
 	</string>
 	<string id="dft_msg_hostiles_nearby">
-		<text>Hostiles within %dm ambush range - deal with them before traveling.</text>
+		<text>Hostiles within %dm outer ambush range - deal with them before traveling.</text>
 	</string>
 	<string id="dft_msg_transition_combat_blocked">
 		<text>You can't cross the border with enemies on you - lose them first!</text>

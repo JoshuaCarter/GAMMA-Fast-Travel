@@ -41,7 +41,9 @@
 			%c[pda_white]- %c[ui_gray_2]Guide cost scales with distance and how dangerous the to/from locations are (approx double Fair Fast Travel's cost).\n
 
 			\n%c[pda_green]AMBUSHES\n
-			%c[pda_white]- %c[ui_gray_2]During a normal travel, hostiles will detect you if you travel within 60 meters of them. When this happens they will ambush you (you will be dropped short of your destination to confront the enemy). This range is reduced by environmental factors:\n
+			%c[pda_white]- %c[ui_gray_2]During normal travel, hostiles can ambush you within your %c[pda_yellow]outer ambush range%c[ui_gray_2] (60m base; +10m when not sneaking). You are dropped on the path to confront them. Outer range needs %c[pda_yellow]line of sight%c[ui_gray_2].\n
+			%c[pda_white]- %c[ui_gray_2]An %c[pda_yellow]inner range%c[ui_gray_2] at %c[pda_yellow]50%% of outer%c[ui_gray_2] also ambushes you even without line of sight (behind cover, around corners).\n
+			%c[pda_white]- %c[ui_gray_2]Outer range is reduced by environment:\n
 			%c[pda_white]- %c[ui_gray_2]Time: Night -20m (7pm-7am), and -10m in the hour before/after night.\n
 			%c[pda_white]- %c[ui_gray_2]Weather: Rain -10m, Storm -15m, Fog -20m.\n
 			%c[pda_white]- %c[ui_gray_2]Your base sneak chance is 25%, but is increased by your Sneaking level (3%% per level,  max dodge chance is 85%).\n
@@ -53,7 +55,7 @@
 			%c[pda_white]- %c[ui_gray_2]Each level adds:\n
 			%c[pda_white]  - %c[pda_yellow]+3%%c[ui_gray_2] chance to avoid hostile encounters when sneaking.\n
 			%c[pda_white]  - %c[pda_yellow]+2%%c[ui_gray_2] PDA sneaking progress speed (and thus reduces how much time/thirt/hunger/sleep you spend).\n
-			%c[pda_white]  - %c[pda_yellow]+1 meters%c[ui_gray_2] to spawn distance from an ambush (making them less dangerous).\n
+			%c[pda_white]  - %c[pda_yellow]+1 meters%c[ui_gray_2] drop distance from hostiles when ambushed (safer spawn).\n
 			%c[pda_white]  - %c[pda_yellow]-3 minutes%c[ui_gray_2] to cooldown time between sneak journeys (no cooldown at max level).\n
 
 			\n%c[pda_white]Good luck stalker...

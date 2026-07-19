@@ -371,6 +371,75 @@ local function collect_hostiles_at(pos, radius, level_id)
     return out
 end
 
+-- True when static/obstacle geometry does not block from -> to (eye to chest height).
+-- Used only for the outer ambush band; close band ignores LOS.
+local function has_ambush_los(from_pos, to_pos)
+    if not (from_pos and to_pos) then return false end
+    if not (ray_pick and rq_target) then return true end
+    local eye, chest = 1.55, 1.0
+    local ox, oy, oz = from_pos.x, (from_pos.y or 0) + eye, from_pos.z
+    local tx, ty, tz = to_pos.x, (to_pos.y or 0) + chest, to_pos.z
+    local dx, dy, dz = tx - ox, ty - oy, tz - oz
+    local dist = math.sqrt(dx * dx + dy * dy + dz * dz)
+    if dist < 1.0 then return true end
+    local ux, uy, uz = dx / dist, dy / dist, dz / dist
+    local range = dist * 0.96
+    local flags = bit.bor(rq_target.rqtStatic or 2, rq_target.rqtObstacle or 8)
+    local ok, clear = pcall(function()
+        local pick = ray_pick(vector():set(ox, oy, oz), vector():set(ux, uy, uz), range, flags, nil)
+        if not pick then return true end
+        pick:query()
+        local hit = pick:get_distance()
+        if not hit or hit <= 0.05 then return true end
+        return hit >= range * 0.98
+    end)
+    return ok and clear == true
+end
+
+local function filter_hostiles_los(from_pos, targets)
+    local out = { squads = {}, npcs = {} }
+    if not (from_pos and targets) then return out end
+    for i = 1, #(targets.squads or {}) do
+        local id = targets.squads[i]
+        local squad = alife_object(id)
+        if squad and squad.position and has_ambush_los(from_pos, squad.position) then
+            out.squads[#out.squads + 1] = id
+        end
+    end
+    for i = 1, #(targets.npcs or {}) do
+        local id = targets.npcs[i]
+        local npc = level.object_by_id(id)
+        if npc then
+            local ok, np = pcall(function() return npc:position() end)
+            if ok and np and has_ambush_los(from_pos, np) then
+                out.npcs[#out.npcs + 1] = id
+            end
+        end
+    end
+    return out
+end
+
+-- Close band first (no LOS). If empty, outer band with LOS required.
+-- Returns targets, radius_m, kind ("close"|"los"), or nil,nil,nil when clear.
+local function scan_ambush_targets(pos, sneaky, level_id)
+    if not pos then return nil, nil, nil end
+    local close_r = dft_ambush_close_radius_m(sneaky)
+    local close_t = collect_hostiles_at(pos, close_r, level_id)
+    if #close_t.squads > 0 or #close_t.npcs > 0 then
+        return close_t, close_r, "close"
+    end
+    local los_r = dft_ambush_radius_m(sneaky)
+    local big_t = collect_hostiles_at(pos, los_r, level_id)
+    if #big_t.squads == 0 and #big_t.npcs == 0 then
+        return nil, nil, nil
+    end
+    local los_t = filter_hostiles_los(pos, big_t)
+    if #los_t.squads == 0 and #los_t.npcs == 0 then
+        return nil, nil, nil
+    end
+    return los_t, los_r, "los"
+end
+
 has_nearby_hostiles_at = function(pos, radius, level_id)
     local targets = collect_hostiles_at(pos, radius, level_id)
     return #targets.squads > 0 or #targets.npcs > 0
@@ -899,14 +968,14 @@ local function resolve_arrival_position()
         if ok then dest_lid = lid end
     end
 
-    local radius = dft_ambush_radius_m(sneaky)
-    local targets = collect_hostiles_at(pos, radius, dest_lid)
-    if #targets.squads == 0 and #targets.npcs == 0 then
+    local targets, radius, kind = scan_ambush_targets(pos, sneaky, dest_lid)
+    if not targets then
         dft.arrival_ambush_targets = nil
+        dft.ambush_kind = nil
         return pos, 0
     end
 
-    log_ambush_scan("arrival-scan", pos, radius, targets)
+    log_ambush_scan("arrival-scan-" .. tostring(kind), pos, radius, targets)
 
     local chance = dft_calc_sneak_chance(sneaky)
     if sneaky and chance > 0 then
@@ -915,6 +984,7 @@ local function resolve_arrival_position()
             dft_log("Arrival dodge: slipped past hostiles (roll %d <= %d%%).", roll, chance)
             dft.encounters_avoided = (dft.encounters_avoided or 0) + 1
             dft.arrival_ambush_targets = nil
+            dft.ambush_kind = nil
             return pos, 0
         end
         dft_log("Arrival ambush: dodge failed (roll %d > %d%%).", roll, chance)
@@ -922,15 +992,32 @@ local function resolve_arrival_position()
         dft_log("Arrival ambush: travel mode (no dodge).")
     end
 
-    local offset = dft_get_encounter_offset()
-    dft_log("Arrival ambush: encounter offset=%dm (mode=%s).", offset, sneaky and "sneak" or "travel")
+    dft.ambush_kind = kind
     local approach = dft.start_pos or pos
-    local short_pos, snap_lvid = finalize_ambush_landing(pos, targets, approach, { lvid = dft.dest_lvid })
+    local path_dist = nearest_hostile_dist_m(pos, targets)
+    local short_pos, snap_lvid
+    if kind == "close" then
+        -- Close contact: standoff from the group, but never closer than the path point was.
+        short_pos, snap_lvid = finalize_ambush_landing(pos, targets, approach, { lvid = dft.dest_lvid })
+        local out_dist = nearest_hostile_dist_m(short_pos, targets)
+        if path_dist and out_dist and out_dist < path_dist then
+            dft_log("Arrival ambush: standoff would close gap (%dm -> %dm) - keeping path point.",
+                path_dist, out_dist)
+            short_pos, snap_lvid = pos, dft.dest_lvid
+        end
+    else
+        -- LOS / far: stay on the approach path; pull short of dest by encounter offset only.
+        local offset = dft_get_encounter_offset()
+        dft_log("Arrival ambush (los): path landing, encounter offset=%dm.", offset or 0)
+        short_pos = apply_travel_offset(pos, offset)
+        snap_lvid = dft.dest_lvid
+    end
     dft.arrival_ambush_targets = targets
     dft.arrival_short_m = math.floor(horizontal_dist(short_pos, pos) or short_pos:distance_to(pos))
     local nearest = nearest_hostile_dist_m(short_pos, targets)
-    dft_log("Arrival ambush landing: short_of_dest=%dm nearest_hostile=%sm pos=(%.1f,%.1f,%.1f)",
-        dft.arrival_short_m, nearest and tostring(nearest) or "?", short_pos.x, short_pos.y, short_pos.z)
+    dft_log("Arrival ambush landing: kind=%s short_of_dest=%dm nearest_hostile=%sm pos=(%.1f,%.1f,%.1f)",
+        tostring(kind), dft.arrival_short_m, nearest and tostring(nearest) or "?",
+        short_pos.x, short_pos.y, short_pos.z)
     return short_pos, 1
 end
 
@@ -2316,24 +2403,82 @@ end
 -- that was built (and displayed) for this trip so ambush checks, emission/encounter
 -- interrupts, and arrival landings all agree on where "ratio% of the way there" actually
 -- is; falls back to a raw straight-line lerp only if no journey chain is available.
+--
+-- Coarse nodes sit on fine navmesh, but mid-segment ratio points are chords between those
+-- nodes. Prefer snapping to the nearer of (nearest coarse path node, nearest fine nav
+-- vertex) when either is within land_prefer_node_m; otherwise fall back to ground-ray.
 local function get_safe_lvid_pos(ratio)
+    local intended = nil
     if dft.path_chain and #dft.path_chain >= 2 then
-        local pos = polyline_safe_pos_at_ratio(dft.path_chain, ratio, dft.path_chain_meta)
-        if pos then
-            local lvid = resolve_lvid_for_pos(pos, nil, dft.dest_gvid)
-            return pos, lvid
+        intended = polyline_safe_pos_at_ratio(dft.path_chain, ratio, dft.path_chain_meta)
+    end
+    if not intended then
+        if not (dft.start_pos and dft.dest_pos) then return nil end
+        intended = vector()
+        lerp_pos(dft.start_pos, dft.dest_pos, ratio, intended)
+    end
+
+    local prefer_m = (dft_path and dft_path.land_prefer_node_m) or 12
+    local best_pos, best_lvid, best_d = nil, nil, prefer_m
+
+    local function consider(pos, lvid)
+        if not (pos and pos.x) then return end
+        local d = horizontal_dist(intended, pos) or intended:distance_to(pos)
+        if d and d < best_d then
+            best_d = d
+            best_pos = vector():set(pos.x, pos.y, pos.z)
+            best_lvid = lvid
         end
     end
 
-    if not (dft.start_pos and dft.dest_pos) then return nil end
-    local interp = vector()
-    lerp_pos(dft.start_pos, dft.dest_pos, ratio, interp)
-    local lvid = level.vertex_id(interp)
-    if lvid_accessible(lvid) then
-        local snapped = level.vertex_position(lvid)
-        if snapped then return snapped, lvid end
+    -- Nearest coarse node on this journey's polyline.
+    local chain = dft.path_chain
+    local is_vertex = dft.path_chain_is_vertex
+    if chain then
+        for i = 1, #chain do
+            if (not is_vertex) or is_vertex[i] or i == 1 or i == #chain then
+                local p = chain[i]
+                local lvid = nil
+                if level and level.vertex_id then
+                    local ok, v = pcall(function() return level.vertex_id(p) end)
+                    if ok and valid_lvid(v) and lvid_accessible(v) then lvid = v end
+                end
+                consider(p, lvid)
+            end
+        end
     end
-    return interp, lvid
+
+    -- Nearest fine navmesh vertex within the same prefer radius.
+    if level and level.vertex_id and level.vertex_position then
+        local ok, lvid = pcall(function() return level.vertex_id(intended) end)
+        if ok and valid_lvid(lvid) and lvid_accessible(lvid) then
+            local ok_p, vp = pcall(function() return level.vertex_position(lvid) end)
+            if ok_p and vp then consider(vp, lvid) end
+        end
+        local near_lvid, near_pos = nearest_accessible_nav_vertex(intended, prefer_m)
+        if near_lvid and near_pos then
+            consider(near_pos, near_lvid)
+        end
+    end
+
+    if best_pos then
+        return best_pos, best_lvid
+    end
+
+    -- Nothing within prefer_m — ground/ray snap near the intended point.
+    local scan_m = 28
+    local snapped, snap_lvid = find_ground_pos(intended, nil, dft.dest_gvid, {
+        anchor = intended,
+        max_drift_m = scan_m,
+        local_only = true,
+        ray_first = true,
+    })
+    if snapped then
+        local lvid = snap_lvid or resolve_lvid_for_pos(snapped, nil, dft.dest_gvid)
+        return snapped, lvid
+    end
+    local lvid = resolve_lvid_for_pos(intended, nil, dft.dest_gvid)
+    return intended, lvid
 end
 
 local function build_path_dots(start_pos, dest_pos, dest_anchor_key)
@@ -2713,12 +2858,16 @@ local function clear_ambush_range_circle()
         dft.ambush_range_last = nil
         return
     end
-    local spot = dft_path.ambush_range_spot or "dft_ambush_range_ring"
+    local spot_n = dft_path.ambush_range_spot or "dft_ambush_range_ring"
+    local spot_a = dft_path.ambush_range_spot_alert or "dft_ambush_range_ring_alert"
     for i = 1, #ids do
         local id = ids[i]
         pcall(function()
-            if level.map_has_object_spot(id, spot) ~= 0 then
-                level.map_remove_object_spot(id, spot)
+            if level.map_has_object_spot(id, spot_n) ~= 0 then
+                level.map_remove_object_spot(id, spot_n)
+            end
+            if level.map_has_object_spot(id, spot_a) ~= 0 then
+                level.map_remove_object_spot(id, spot_a)
             end
         end)
         local obj = alife_object(id)
@@ -2728,18 +2877,13 @@ local function clear_ambush_range_circle()
     dft.ambush_range_last = nil
 end
 
-local function update_ambush_range_circle(center_pos, radius_m)
-    if not (center_pos and radius_m and radius_m > 0 and db.actor) then
-        clear_ambush_range_circle()
+local function append_ambush_range_ring(center_pos, radius_m, spot, segments, out_ids)
+    if not (center_pos and radius_m and radius_m > 0 and spot and segments and segments > 0) then
         return
     end
-    local segments = dft_path.ambush_range_segments or 32
-    local spot = dft_path.ambush_range_spot or "dft_ambush_range_ring"
     local offset = dft_path.dot_underground_offset_m or 100
     local lvid = db.actor:level_vertex_id()
     local gvid = db.actor:game_vertex_id()
-    clear_ambush_range_circle()
-    dft.ambush_range_ids = {}
     for i = 0, segments - 1 do
         local angle = (2 * math.pi * i) / segments
         local pos = vector():set(
@@ -2750,15 +2894,39 @@ local function update_ambush_range_circle(center_pos, radius_m)
         local buried = vector():set(pos.x, pos.y - offset, pos.z)
         local se = alife_create("device_pda", buried, lvid, gvid)
         if se then
-            dft.ambush_range_ids[#dft.ambush_range_ids + 1] = se.id
+            out_ids[#out_ids + 1] = se.id
             pcall(level.map_add_object_spot_ser, se.id, spot, "")
             freeze_buried_dot(se.id)
         end
     end
+end
+
+local function update_ambush_range_circle(center_pos, los_radius_m, alert_kind, close_radius_m)
+    if not (center_pos and los_radius_m and los_radius_m > 0 and db.actor) then
+        clear_ambush_range_circle()
+        return
+    end
+    local spot_y = dft_path.ambush_range_spot or "dft_ambush_range_ring"
+    local spot_r = dft_path.ambush_range_spot_alert or "dft_ambush_range_ring_alert"
+    -- Only the band that triggered the ambush turns red; the other stays yellow.
+    local close_spot = (alert_kind == "close") and spot_r or spot_y
+    local los_spot = (alert_kind == "los") and spot_r or spot_y
+    clear_ambush_range_circle()
+    dft.ambush_range_ids = {}
+    local close_r = close_radius_m or 0
+    if close_r > 0 and close_r < los_radius_m then
+        append_ambush_range_ring(center_pos, close_r, close_spot,
+            dft_path.ambush_range_close_segments or 24, dft.ambush_range_ids)
+    end
+    append_ambush_range_ring(center_pos, los_radius_m, los_spot,
+        dft_path.ambush_range_segments or 32, dft.ambush_range_ids)
     dft.ambush_range_last = {
-        radius = radius_m,
+        close_r = close_r,
+        los_r = los_radius_m,
+        radius = los_radius_m,
         cx = center_pos.x,
         cz = center_pos.z,
+        alert_kind = alert_kind or false,
     }
 end
 
@@ -2786,19 +2954,106 @@ local function sync_ambush_range_circle()
     if not (db.actor and db.actor:alive()) then return end
 
     local sneaky = dft.is_traveling and dft.travel_mode == "sneaky"
-    local radius = dft_ambush_radius_m(sneaky)
+    local los_r = dft_ambush_radius_m(sneaky)
+    local close_r = dft_ambush_close_radius_m(sneaky)
+    -- Smooth journey point on the polyline (not land-snap / coarse-node snap — that lagged
+    -- behind the walking dots). Teleport landings still use get_safe_lvid_pos separately.
     local center = db.actor:position()
-    if dft.is_traveling and dft.travel_dist and dft.travel_dist > 0 then
+    if dft.is_traveling and dft.travel_dist and dft.travel_dist > 0
+        and dft.path_chain and #dft.path_chain >= 2 then
         local ratio = math.min((dft.current_dist or 0) / dft.travel_dist, 1.0)
-        local vpos = get_safe_lvid_pos(ratio)
+        local vpos = polyline_pos_at_ratio(dft.path_chain, ratio)
         if vpos then center = vpos end
     end
 
+    local alert_kind = false
+    if dft.is_traveling and dft.ambush_pending then
+        alert_kind = dft.ambush_kind or "los"
+    end
     local last = dft.ambush_range_last
-    if last and last.radius == radius and last.cx == center.x and last.cz == center.z then
+    if last and last.los_r == los_r and last.close_r == close_r and last.alert_kind == alert_kind
+        and math.abs((last.cx or 0) - center.x) < 2
+        and math.abs((last.cz or 0) - center.z) < 2 then
         return
     end
-    update_ambush_range_circle(center, radius)
+    update_ambush_range_circle(center, los_r, alert_kind, close_r)
+end
+
+local function clear_ambush_dir_marker()
+    local ids = dft.ambush_dir_ids
+    if not (ids and #ids > 0) then
+        dft.ambush_dir_ids = {}
+        return
+    end
+    local spot = dft_path.ambush_dir_spot or dft_path.dot_spot_ambush_icon or "dft_path_dot_ambush_icon"
+    for i = 1, #ids do
+        local id = ids[i]
+        pcall(function()
+            if level.map_has_object_spot(id, spot) ~= 0 then
+                level.map_remove_object_spot(id, spot)
+            end
+            if level.map_has_object_spot(id, dft_path.dot_spot_ambush) ~= 0 then
+                level.map_remove_object_spot(id, dft_path.dot_spot_ambush)
+            end
+        end)
+        local obj = alife_object(id)
+        if obj then pcall(alife_release, obj) end
+    end
+    dft.ambush_dir_ids = {}
+end
+
+-- Red waypoint-style pin(s) along the bearing to the nearest ambusher, ~10s then clear.
+local function show_ambush_dir_marker(targets, from_pos)
+    clear_ambush_dir_marker()
+    if not (targets and db.actor) then return end
+    local origin = from_pos or db.actor:position()
+    local hostile = nearest_hostile_world(targets, origin)
+    if not (hostile and origin) then return end
+    local dx = hostile.x - origin.x
+    local dz = hostile.z - origin.z
+    local horiz = math.sqrt(dx * dx + dz * dz)
+    if horiz < 1.0 then
+        dx, dz, horiz = 1, 0, 1
+    end
+    local ux, uz = dx / horiz, dz / horiz
+    local offset = dft_path.dot_underground_offset_m or 100
+    local lvid = db.actor:level_vertex_id()
+    local gvid = db.actor:game_vertex_id()
+    local spot_pin = dft_path.ambush_dir_spot or dft_path.dot_spot_ambush_icon or "dft_path_dot_ambush_icon"
+    local spot_dot = dft_path.dot_spot_ambush or "dft_path_dot_ambush"
+    dft.ambush_dir_ids = {}
+
+    -- Shaft: a few red dots between the landing and the threat (minimap direction cue).
+    local shaft_n = math.min(4, math.max(1, math.floor(horiz / 18)))
+    for i = 1, shaft_n do
+        local t = (i / (shaft_n + 1)) * math.min(horiz, 80)
+        local pos = vector():set(origin.x + ux * t, origin.y, origin.z + uz * t)
+        local buried = vector():set(pos.x, pos.y - offset, pos.z)
+        local se = alife_create("device_pda", buried, lvid, gvid)
+        if se then
+            dft.ambush_dir_ids[#dft.ambush_dir_ids + 1] = se.id
+            pcall(level.map_add_object_spot_ser, se.id, spot_dot, "")
+            freeze_buried_dot(se.id)
+        end
+    end
+
+    -- Tip: waypoint pin on the nearest hostile.
+    local tip = vector():set(hostile.x, origin.y, hostile.z)
+    local buried_tip = vector():set(tip.x, tip.y - offset, tip.z)
+    local tip_se = alife_create("device_pda", buried_tip, lvid, gvid)
+    if tip_se then
+        dft.ambush_dir_ids[#dft.ambush_dir_ids + 1] = tip_se.id
+        pcall(level.map_add_object_spot_ser, tip_se.id, spot_pin, "")
+        freeze_buried_dot(tip_se.id)
+    end
+
+    local ttl = (_G.dft_ambush and _G.dft_ambush.dir_marker_s) or 10
+    CreateTimeEvent("dft", "ambush_dir_clear", ttl, function()
+        clear_ambush_dir_marker()
+        return true
+    end)
+    dft_log("Ambush dir marker: %d spots toward hostile %.0fm for %ds.",
+        #dft.ambush_dir_ids, horiz, ttl)
 end
 
 path_preview_enabled = function()
@@ -2912,6 +3167,7 @@ do
     _G.dft_get_safe_pos = get_safe_pos
     _G.dft_apply_travel_offset = apply_travel_offset
     _G.dft_collect_hostiles_at = collect_hostiles_at
+    _G.dft_scan_ambush_targets = scan_ambush_targets
     _G.dft_alerted_enemy_within = alerted_enemy_within
     _G.dft_nearest_transition_point = nearest_transition_point
     _G.dft_nearest_transition_door_id = nearest_transition_door_id
@@ -2939,6 +3195,8 @@ do
     _G.dft_clear_ambush_range_circle = clear_ambush_range_circle
     _G.dft_update_ambush_range_circle = update_ambush_range_circle
     _G.dft_sync_ambush_range_circle = sync_ambush_range_circle
+    _G.dft_clear_ambush_dir_marker = clear_ambush_dir_marker
+    _G.dft_show_ambush_dir_marker = show_ambush_dir_marker
     _G.dft_preview_eligible = preview_eligible
     _G.dft_ensure_level_graph_cache = ensure_level_graph_cache
     _G.dft_graph_nearest_gvid = graph_nearest_gvid

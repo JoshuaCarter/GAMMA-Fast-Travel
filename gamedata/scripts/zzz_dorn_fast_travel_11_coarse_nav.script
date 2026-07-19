@@ -1,5 +1,6 @@
 -- Dorn's Fast Travel: coarse navmesh graph (dev build / load / PDA display).
 -- Anchors: bases + transitions (full clique) + campfires >50m from nearest core (spoke to each core).
+-- Sparse maps: boundary probes from level bounds (probe clique + spokes to cores).
 -- Standalone from 05_path — mesh helpers copied here for offline cache builds.
 
 local dft = _G.dft
@@ -7,15 +8,21 @@ local dft = _G.dft
 local CN_SCHEMA = 3
 -- Cache filename uses mod major.minor from _G.dft_version (see 01_core).
 -- Patch bumps (0.1.0 → 0.1.5) keep the same file; feature bumps (0.1 → 0.2) force rebuild.
-local CN_SUBSAMPLE_M = 55
+local CN_SUBSAMPLE_M = 15
 local CN_BUILD_MAX_NODES = 2500
 local CN_SPLICE_MAX_M = 72
 local CN_CONNECTOR_MAX_M = 50
 local CN_CAMPFIRE_MIN_CORE_M = 50
-local CN_JUNCTION_SNAP_M = 18
+local CN_JUNCTION_SNAP_M = 8
 local CN_SNAP_TRIVIAL_M = 3
 local CN_SNAP_GRID_M = 15
 local CN_UNDERGROUND_Y = 100
+-- Boundary probes: fill maps whose real travel anchors are few or clustered.
+local CN_PROBE_MIN_CORE = 3          -- always probe if fewer cores than this
+local CN_PROBE_SPAN_FRAC = 0.40      -- or if core AABB diagonal < this * level diagonal
+local CN_PROBE_INSET_FRAC = 0.10     -- inset from level bounds (fraction of width/depth)
+local CN_PROBE_NEAR_CORE_M = 80      -- skip a probe if within this of an existing core
+local CN_PROBE_SNAP_M = 120          -- nav-snap search radius for probe positions
 local CN_MOD_SCRIPT = "zzz_dorn_fast_travel_11_coarse_nav.script"
 local CN_CACHE_VFS_DIR = "dft_coarse_nav\\"
 local CN_SCRIPT_SOURCE = debug.getinfo(1, "S") and debug.getinfo(1, "S").source
@@ -877,22 +884,107 @@ local function cn_collect_campfire_anchors(core, seen)
     return campfires
 end
 
+local function cn_aabb_diagonal(min_x, min_z, max_x, max_z)
+    local dx, dz = max_x - min_x, max_z - min_z
+    return math.sqrt(dx * dx + dz * dz)
+end
+
+local function cn_core_span_m(core)
+    if not (core and #core > 0) then return 0 end
+    local min_x, max_x = core[1].pos.x, core[1].pos.x
+    local min_z, max_z = core[1].pos.z, core[1].pos.z
+    for i = 2, #core do
+        local p = core[i].pos
+        if p.x < min_x then min_x = p.x end
+        if p.x > max_x then max_x = p.x end
+        if p.z < min_z then min_z = p.z end
+        if p.z > max_z then max_z = p.z end
+    end
+    return cn_aabb_diagonal(min_x, min_z, max_x, max_z)
+end
+
+local function cn_need_boundary_probes(core)
+    if not (core and #core >= 1) then return false end
+    if #core < CN_PROBE_MIN_CORE then return true end
+    if not (level and level.get_bounding_volume) then return false end
+    local ok, bv = pcall(level.get_bounding_volume)
+    if not (ok and bv and bv.min and bv.max) then return false end
+    local level_diag = cn_aabb_diagonal(bv.min.x, bv.min.z, bv.max.x, bv.max.z)
+    if level_diag < 50 then return false end
+    return cn_core_span_m(core) < (level_diag * CN_PROBE_SPAN_FRAC)
+end
+
+-- Fake travel points around the level AABB so sparse/clustered cores still span the map.
+local function cn_collect_boundary_probes(core)
+    local probes = {}
+    if not cn_need_boundary_probes(core) then return probes end
+    if not (level and level.get_bounding_volume) then return probes end
+    local ok, bv = pcall(level.get_bounding_volume)
+    if not (ok and bv and bv.min and bv.max) then
+        cn_log("boundary probes: get_bounding_volume failed")
+        return probes
+    end
+
+    local min_x, max_x = bv.min.x, bv.max.x
+    local min_z, max_z = bv.min.z, bv.max.z
+    local mid_y = (bv.min.y + bv.max.y) * 0.5
+    local inset_x = (max_x - min_x) * CN_PROBE_INSET_FRAC
+    local inset_z = (max_z - min_z) * CN_PROBE_INSET_FRAC
+    if inset_x < 20 then inset_x = 20 end
+    if inset_z < 20 then inset_z = 20 end
+    local x0, x1 = min_x + inset_x, max_x - inset_x
+    local z0, z1 = min_z + inset_z, max_z - inset_z
+    local xm, zm = (x0 + x1) * 0.5, (z0 + z1) * 0.5
+
+    -- 8 perimeter samples: 4 corners + 4 edge midpoints (no center).
+    local samples = {
+        { x0, z0 }, { xm, z0 }, { x1, z0 },
+        { x0, zm },             { x1, zm },
+        { x0, z1 }, { xm, z1 }, { x1, z1 },
+    }
+
+    for i = 1, #samples do
+        local sx, sz = samples[i][1], samples[i][2]
+        local raw = vector():set(sx, mid_y, sz)
+        local lvid, snap = cn_resolve_nav_vertex(raw, CN_PROBE_SNAP_M)
+        if lvid and snap and snap.x then
+            local pos = cn_copy_pos(snap)
+            local near = cn_nearest_core_m(pos, core)
+            if not near or near > CN_PROBE_NEAR_CORE_M then
+                probes[#probes + 1] = {
+                    key = "probe:" .. tostring(#probes + 1),
+                    id = nil,
+                    kind = "probe",
+                    pos = pos,
+                    lvid = lvid,
+                }
+            end
+        end
+    end
+
+    cn_log("boundary probes: %d placed (cores=%d span=%.0fm)",
+        #probes, #core, cn_core_span_m(core))
+    return probes
+end
+
 local function cn_collect_anchors()
     local core, seen = cn_collect_core_anchors()
     local campfires = cn_collect_campfire_anchors(core, seen)
+    local probes = cn_collect_boundary_probes(core)
 
     local anchors = {}
     for i = 1, #core do anchors[#anchors + 1] = core[i] end
     for i = 1, #campfires do anchors[#anchors + 1] = campfires[i] end
+    for i = 1, #probes do anchors[#anchors + 1] = probes[i] end
 
     local trans_n, base_n = 0, 0
     for i = 1, #core do
         if core[i].kind == "transition" then trans_n = trans_n + 1 else base_n = base_n + 1 end
     end
 
-    cn_log("anchors: %d transitions, %d bases, %d campfires (%d total)",
-        trans_n, base_n, #campfires, #anchors)
-    return anchors, core, campfires
+    cn_log("anchors: %d transitions, %d bases, %d campfires, %d probes (%d total)",
+        trans_n, base_n, #campfires, #probes, #anchors)
+    return anchors, core, campfires, probes
 end
 
 local function cn_anchor_hash(anchors)
@@ -902,7 +994,7 @@ local function cn_anchor_hash(anchors)
     return table.concat(keys, "|")
 end
 
-local function cn_build_edge_queue(core, campfires)
+local function cn_build_edge_queue(core, campfires, probes)
     local queue = {}
     for i = 1, #core do
         local src = core[i]
@@ -916,6 +1008,16 @@ local function cn_build_edge_queue(core, campfires)
         for ki = 1, #core do
             local k = core[ki]
             queue[#queue + 1] = { from = cf, to = k, label = "campfire->" .. k.kind }
+        end
+    end
+    -- Probes: full clique among themselves (span the map) + spoke to each real core.
+    for i = 1, #(probes or {}) do
+        local p = probes[i]
+        for j = i + 1, #probes do
+            queue[#queue + 1] = { from = p, to = probes[j], label = "probe->probe" }
+        end
+        for ki = 1, #core do
+            queue[#queue + 1] = { from = p, to = core[ki], label = "probe->" .. core[ki].kind }
         end
     end
     table.sort(queue, function(a, b)
@@ -1268,7 +1370,7 @@ local function cn_start_build()
         cn_log("build already running")
         return false
     end
-    local anchors, core, campfires = cn_collect_anchors()
+    local anchors, core, campfires, probes = cn_collect_anchors()
     if #core < 1 then
         cn_log("build aborted: need at least 1 base/transition anchor")
         return false
@@ -1280,12 +1382,14 @@ local function cn_start_build()
             #anchors, (#parts > 0) and table.concat(parts, ", ") or "none")
         return false
     end
-    local queue = cn_build_edge_queue(core, campfires)
+    local queue = cn_build_edge_queue(core, campfires, probes)
     if #queue < 1 then
-        cn_log("build aborted: no edge jobs (core=%d, campfires=%d)", #core, #(campfires or {}))
+        cn_log("build aborted: no edge jobs (core=%d, campfires=%d, probes=%d)",
+            #core, #(campfires or {}), #(probes or {}))
         return false
     end
-    cn_log("starting build: %d core, %d campfires, %d edge jobs", #core, #(campfires or {}), #queue)
+    cn_log("starting build: %d core, %d campfires, %d probes, %d edge jobs",
+        #core, #(campfires or {}), #(probes or {}), #queue)
     cn_msg("Coarse nav: building...", "warning")
     cn_state().build = {
         active = true,
@@ -1568,7 +1672,10 @@ local function cn_try_load()
         return false
     end
     if g.anchor_hash ~= hash then
-        cn_log("cache stale (anchor hash mismatch) — rebuild recommended")
+        cn_log("cache stale (anchor hash mismatch) — rebuild required")
+        cn_state().graph = nil
+        cn_sync_display()
+        return false
     end
     cn_state().graph = g
     local comps = cn_union_find_components(g)
