@@ -1,7 +1,7 @@
 -- Dorn's Fast Travel MCM
 
 -- dorn_mcm_banner:begin (managed by sync-dorn-common.sh)
-local DORN_COMMON_VERSION = "dorn_common_c62f913d"
+local DORN_COMMON_VERSION = "dorn_common_442e61f8"
 local function dorn_mcm()
 	local hash = DORN_COMMON_VERSION:match("dorn_common_(.+)$")
 	return _G["dorn_mcm_" .. hash]
@@ -51,6 +51,13 @@ function on_mcm_load()
 				text = "ui_mcm_dorn_fast_travel_development_section",
 				gr = MCM.with_header({
 					{
+						id = "debug_overlay",
+						type = "check",
+						val = 1,
+						def = false,
+						hint = "dorn_fast_travel_debug_overlay",
+					},
+					{
 						id = "debug_log",
 						type = "check",
 						val = 1,
@@ -80,6 +87,13 @@ function on_mcm_load()
 						hint = "dorn_fast_travel_sneaking_level_down",
 					},
 					{ id = "line_coarse_nav", type = "line" },
+					{
+						id = "coarse_nav_rebuild_on_load",
+						type = "check",
+						val = 1,
+						def = false,
+						hint = "dorn_fast_travel_coarse_nav_rebuild_on_load",
+					},
 					{
 						id = "coarse_nav_build",
 						type = "key_bind",

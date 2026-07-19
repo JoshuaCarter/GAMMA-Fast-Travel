@@ -26,6 +26,12 @@
 	<string id="ui_mcm_dorn_fast_travel_development_section">
 		<text>Development</text>
 	</string>
+	<string id="ui_mcm_dorn_fast_travel_debug_overlay">
+		<text>Show debug overlay</text>
+	</string>
+	<string id="ui_mcm_dorn_fast_travel_debug_overlay_desc">
+		<text>Show travel debug info on screen (time until next emission).</text>
+	</string>
 	<string id="ui_mcm_dorn_fast_travel_debug_log">
 		<text>Enable debug logging</text>
 	</string>
@@ -50,10 +56,16 @@
 	<string id="ui_mcm_dorn_fast_travel_sneaking_level_down_desc">
 		<text>Development keybind: decrease Sneaking skill level by 1.</text>
 	</string>
+	<string id="ui_mcm_dorn_fast_travel_coarse_nav_rebuild_on_load">
+		<text>Always rebuild nav cache on load</text>
+	</string>
+	<string id="ui_mcm_dorn_fast_travel_coarse_nav_rebuild_on_load_desc">
+		<text>When on, always sync-rebuild this level's coarse nav on load — ignores any matching versioned cache. Off = load the major.minor cache if present, else rebuild.</text>
+	</string>
 	<string id="ui_mcm_dorn_fast_travel_coarse_nav_build">
-		<text>Build Coarse Nav Cache</text>
+		<text>Rebuild Coarse Nav (key)</text>
 	</string>
 	<string id="ui_mcm_dorn_fast_travel_coarse_nav_build_desc">
-		<text>Development keybind: build the per-level coarse navmesh graph (bases and level transitions, all pairs). When bound, the graph is shown on the PDA map after build or level load if a cache exists.</text>
+		<text>Development keybind: force sync-rebuild the per-level coarse nav graph and overwrite the current major.minor cache. When bound, the graph is shown on the PDA map.</text>
 	</string>
 </string_table>

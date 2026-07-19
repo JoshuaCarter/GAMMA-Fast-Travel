@@ -1,6 +1,9 @@
 -- Dorn's Fast Travel: Shared state, constants, logging, and PDA messages.
 -- Loaded automatically before zzzz_dorn_fast_travel_main.script
 
+-- Mod semver. Coarse-nav cache files key on major.minor only (patch bumps keep cache).
+_G.dft_version = "0.1.0"
+
 -- Shared dft globals (Anomaly isolates zzz_* script environments)
 local dft_config = _G.dft_config
 

@@ -1,4 +1,4 @@
-# Dorn's Fast Travel v0.0.0
+# Dorn's Fast Travel v0.1.0
 
 Adds free PDA simulated fast travel through the zone using real pathing and ambushes. Fits **S.T.A.L.K.E.R. G.A.M.M.A.** naturally. Also adds a Sneaking skill. See **PDA > Guide > Addons > Dorn's Fast Travel**.
 

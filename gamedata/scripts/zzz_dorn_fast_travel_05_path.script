@@ -2165,6 +2165,10 @@ get_cached_line_snap_path = function(start_pos, dest_pos)
     if not cache then return nil end
     local key = path_cache_key(start_pos, dest_pos)
     if not key or cache.key ~= key then return nil end
+    -- Live routing is coarse-only; reject stale fine-mesh / straight caches from older builds.
+    if not (cache.meta and cache.meta.mode == "coarse_graph") then
+        return nil
+    end
     return cache.chain, cache.is_vertex, cache.path_len, cache.raw_chain, cache.meta
 end
 
@@ -2181,13 +2185,10 @@ local function store_line_snap_path_cache(start_pos, dest_pos, chain, is_vertex,
     }
 end
 
--- Primary (and only) path builder, used everywhere: display preview, journey dots, ambush
--- ratio lookups, and every mid-journey teleport. Tries the navmesh A* pathfinder; if it can't
--- resolve a path at all (no level.vertex_in_direction, totally disconnected navmesh islands),
--- degrades to a single straight ground-snapped segment rather than leaving no path.
--- 4th return value is the raw, unsmoothed A* vertex chain (for the debug preview only -
--- everything else should use the first three return values).
-build_line_snap_path = function(start_pos, dest_pos)
+-- Primary (and only) path builder for preview, journey dots, and mid-journey teleports.
+-- Coarse nav graph only — no fine navmesh A*, no straight-line fallback.
+-- Optional 3rd arg: dest_anchor_key ("base:id" / "transition:id" / "campfire:id").
+build_line_snap_path = function(start_pos, dest_pos, dest_anchor_key)
     if not (start_pos and dest_pos) then return {}, {}, 0, {}, nil end
 
     local cached_chain, cached_is_vertex, cached_len, cached_raw, cached_meta = get_cached_line_snap_path(start_pos, dest_pos)
@@ -2195,32 +2196,29 @@ build_line_snap_path = function(start_pos, dest_pos)
         return cached_chain, cached_is_vertex, cached_len, cached_raw, cached_meta
     end
 
-    local nav_chain, nav_is_vertex, nav_len, nav_ok, nav_raw_or_reason, nav_meta =
-        build_navmesh_path(start_pos, dest_pos)
-    if nav_ok and nav_chain and #nav_chain >= 2 then
-        dft_path_road_log(
-            "build (navmesh A*): start=%s dest=%s points=%d path=%.0fm mode=%s",
-            dft_vec_str(start_pos), dft_vec_str(dest_pos), #nav_chain, nav_len,
-            tostring(nav_meta and nav_meta.mode or "?")
-        )
-        store_line_snap_path_cache(start_pos, dest_pos, nav_chain, nav_is_vertex, nav_len, nav_raw_or_reason, nav_meta)
-        return nav_chain, nav_is_vertex, nav_len, nav_raw_or_reason, nav_meta
+    local chain, is_vertex, path_len, meta
+    if _G.dft_coarse_nav_build_path then
+        local ok, c, iv, plen, m = pcall(_G.dft_coarse_nav_build_path, start_pos, dest_pos, dest_anchor_key)
+        if ok and c and #c >= 2 then
+            chain, is_vertex, path_len, meta = c, iv, plen, m
+        elseif not ok then
+            dft_log_error("path build: coarse nav error: %s", tostring(c))
+        end
     end
 
-    dft_log_error("path build: navmesh A* failed (%s) at start=%s dest=%s - using direct straight line.",
-        tostring(nav_raw_or_reason), dft_vec_str(start_pos), dft_vec_str(dest_pos))
-    local chain = {
-        vector():set(start_pos.x, start_pos.y + 0.1, start_pos.z),
-        vector():set(dest_pos.x, dest_pos.y + 0.1, dest_pos.z),
-    }
-    local is_vertex = { false, false }
-    local path_len = polyline_length(chain)
-    local fallback_meta = {
-        safe_vertices = { 1, 2 },
-        no_land_segments = {},
-        mode = "fallback_straight",
-    }
-    return chain, is_vertex, path_len, chain, fallback_meta
+    if not (chain and #chain >= 2) then
+        dft_log_error("path build: coarse nav failed at start=%s dest=%s key=%s",
+            dft_vec_str(start_pos), dft_vec_str(dest_pos), tostring(dest_anchor_key))
+        return {}, {}, 0, {}, nil
+    end
+
+    dft_path_road_log(
+        "build (coarse graph): start=%s dest=%s points=%d path=%.0fm key=%s",
+        dft_vec_str(start_pos), dft_vec_str(dest_pos), #chain, path_len or 0,
+        tostring(dest_anchor_key or "?")
+    )
+    store_line_snap_path_cache(start_pos, dest_pos, chain, is_vertex, path_len, chain, meta)
+    return chain, is_vertex, path_len, chain, meta
 end
 
 -- Fixed-spacing samples along an existing polyline. Skips interiors of NO_LAND patch segments.
@@ -2338,9 +2336,9 @@ local function get_safe_lvid_pos(ratio)
     return interp, lvid
 end
 
-local function build_path_dots(start_pos, dest_pos)
+local function build_path_dots(start_pos, dest_pos, dest_anchor_key)
     local straight = dft_distance_pda(start_pos, dest_pos) or start_pos:distance_to(dest_pos)
-    local chain, is_vertex, path_len, _raw, path_meta = build_line_snap_path(start_pos, dest_pos)
+    local chain, is_vertex, path_len, _raw, path_meta = build_line_snap_path(start_pos, dest_pos, dest_anchor_key)
 
     if #chain < 2 then
         dft_log("path: build failed (%.0fm straight)", straight)
@@ -2373,9 +2371,12 @@ path_stats_for_target = function(id, ln, click_pos)
     if not target or not target.pos then return { error = terr or "no_target" } end
     local start = db.actor:position()
     local straight = dft_distance_pda(start, target.pos) or start:distance_to(target.pos)
+    local dest_key = _G.dft_coarse_nav_dest_anchor_key and _G.dft_coarse_nav_dest_anchor_key(id) or nil
     local chain, is_vertex, path_len, _raw, path_meta
     local menu_cache = dft.menu_path_cache
-    if menu_cache and menu_cache.seq == dft.menu_open_seq and menu_cache.id == id then
+    if menu_cache and menu_cache.seq == dft.menu_open_seq and menu_cache.id == id
+        and menu_cache.meta and menu_cache.meta.mode == "coarse_graph"
+        and menu_cache.chain and #menu_cache.chain >= 2 then
         chain = menu_cache.chain
         is_vertex = menu_cache.is_vertex
         path_len = menu_cache.path_len
@@ -2383,25 +2384,21 @@ path_stats_for_target = function(id, ln, click_pos)
     else
         chain, is_vertex, path_len, _raw, path_meta = get_cached_line_snap_path(start, target.pos)
         if not chain then
-            if dft_path_road_log_enabled() or (_G.dft_config and _G.dft_config.debug_log) then
-                chain, is_vertex, path_len, _raw, path_meta = build_line_snap_path(start, target.pos)
-            else
-                chain, is_vertex, path_len = {}, {}, straight
-            end
+            chain, is_vertex, path_len, _raw, path_meta = build_line_snap_path(start, target.pos, dest_key)
         end
     end
     local vtx_count = 0
-    for i = 2, #chain - 1 do
-        if is_vertex[i] then vtx_count = vtx_count + 1 end
+    for i = 2, #(chain or {}) - 1 do
+        if is_vertex and is_vertex[i] then vtx_count = vtx_count + 1 end
     end
-    local dots = (#chain >= 2) and densify_polyline(chain, dft_path.dot_spacing_m, nil, path_meta) or {}
+    local dots = (chain and #chain >= 2) and densify_polyline(chain, dft_path.dot_spacing_m, nil, path_meta) or {}
     return {
         dest = target.pos,
         straight = straight,
         path_len = path_len or straight,
         vertex_count = #dots,
         vertex_snaps = vtx_count,
-        failed = #chain < 2,
+        failed = not chain or #chain < 2,
     }
 end
 
@@ -2857,6 +2854,7 @@ build_path_preview = function(id, is_lc)
 
     local start = db.actor:position()
     local dest = target.pos
+    local dest_key = _G.dft_coarse_nav_dest_anchor_key and _G.dft_coarse_nav_dest_anchor_key(id) or nil
     local dist = dft_distance_pda(start, dest) or start:distance_to(dest)
     if dist < 40 and not is_lc then
         dft_log("path preview: too close (%.0fm)", dist)
@@ -2865,9 +2863,9 @@ build_path_preview = function(id, is_lc)
         return
     end
 
-    local chain, is_vertex, path_len, raw_chain, path_meta = build_line_snap_path(start, dest)
+    local chain, is_vertex, path_len, raw_chain, path_meta = build_line_snap_path(start, dest, dest_key)
     if #chain < 2 then
-        dft_log("path preview: pivot failed (%.0fm straight)", dist)
+        dft_log("path preview: coarse path failed (%.0fm straight)", dist)
         dft.is_path_preview = false
         dft.path_preview_id = nil
         return

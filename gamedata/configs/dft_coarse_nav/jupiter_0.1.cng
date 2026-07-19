@@ -1,4 +1,5 @@
 DFT_COARSE_V3
+feature_version=0.1
 level_name=jupiter
 level_id=28
 anchor_hash=base:12038|base:12040|base:12044|base:12048|base:12062|campfire:11132|transition:11338|transition:11339|transition:11340|transition:11341|transition:11342|transition:11343|transition:11344|transition:22975

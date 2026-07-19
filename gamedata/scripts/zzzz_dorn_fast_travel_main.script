@@ -2,7 +2,7 @@
 -- Module libs load first as zzz_dorn_fast_travel_*.script
 
 local MOD_ID = "dorn_fast_travel"
-local DORN_COMMON_VERSION = "dorn_common_c62f913d" -- managed by sync-dorn-common.sh
+local DORN_COMMON_VERSION = "dorn_common_442e61f8" -- managed by sync-dorn-common.sh
 _G.dft_config = _G.dft_config or {}
 local dft_config = _G.dft_config
 local dft = _G.dft
@@ -15,7 +15,7 @@ local dft = _G.dft
 -- dorn_common_f575cc9b.script's header comment), so it must stay a real bare top-level
 -- function, never a local, even though no other DFT script calls it by name.
 local mcm_option_path, get_config, actor_on_before_hit, on_option_change,
-    on_loading_screen_dismissed, actor_on_first_update, menu_item_is_ours,
+    on_loading_screen_dismissed, on_loading_screen_key_prompt, actor_on_first_update, menu_item_is_ours,
     strip_own_menu_items, add_cannot_travel_item, add_guide_menu_item,
     add_travel_menu_items, on_map_right_click, on_map_spot_menu_add_property_impl,
     on_map_spot_menu_add_property, on_map_spot_menu_property_clicked, on_key_press
@@ -24,11 +24,13 @@ local MCM_SECTION_MAIN = "main"
 local MCM_SECTION_DEV = "development"
 
 local MCM_DEV_KEYS = {
+    debug_overlay       = true,
     debug_log           = true,
     path_preview        = true,
     sneaking_level_up   = true,
     sneaking_level_down = true,
     coarse_nav_build    = true,
+    coarse_nav_rebuild_on_load = true,
 }
 
 -- ============================================================
@@ -41,10 +43,12 @@ end
 
 local get_config_defaults = {
     message_duration = 30,
+    debug_overlay    = false,
     debug_log        = false,
     path_preview     = false,
     block_transition_in_combat = true,
     show_ambush_range        = false,
+    coarse_nav_rebuild_on_load = false,
 }
 
 get_config = function(key)
@@ -56,6 +60,7 @@ get_config = function(key)
 end
 
 local function load_config()
+    dft_config.debug_overlay = get_config("debug_overlay") == true
     dft_config.debug_log = get_config("debug_log") == true
     local pp = get_config("path_preview")
     dft_config.path_preview = (pp == true or pp == 1)
@@ -73,6 +78,13 @@ local function load_config()
         and dft_dorn.mcm.key(MOD_ID, MCM_SECTION_DEV .. "/sneaking_level_down", nil)
     dft_config.coarse_nav_build = dft_dorn and dft_dorn.mcm
         and dft_dorn.mcm.key(MOD_ID, MCM_SECTION_DEV .. "/coarse_nav_build", nil)
+    dft_config.coarse_nav_rebuild_on_load = get_config("coarse_nav_rebuild_on_load") == true
+    if dft_dorn and dft_dorn.dbg and dft_dorn.dbg.set_enabled then
+        dft_dorn.dbg.set_enabled(MOD_ID, dft_config.debug_overlay)
+    end
+    if not dft_config.debug_overlay and dft then
+        dft._debug_overlay_msg = nil
+    end
     if _G.dft_coarse_nav_sync_display then
         pcall(_G.dft_coarse_nav_sync_display)
     end
@@ -168,6 +180,7 @@ function on_game_start()
         RegisterScriptCallback("actor_on_before_hit",            actor_on_before_hit)
         RegisterScriptCallback("on_key_press",                   on_key_press)
         RegisterScriptCallback("on_loading_screen_dismissed",    on_loading_screen_dismissed)
+        RegisterScriptCallback("on_loading_screen_key_prompt",   on_loading_screen_key_prompt)
         if dft_on_level_changing then
             RegisterScriptCallback("on_level_changing", dft_on_level_changing)
         end
@@ -244,6 +257,22 @@ on_loading_screen_dismissed = function()
     dft.player_ready = true
 end
 
+-- Hard gate: ensure coarse nav cache for this level before play (blocks until sync build if needed).
+on_loading_screen_key_prompt = function()
+    local ok, err = pcall(function()
+        if dft_build_dynamic_map then
+            pcall(dft_build_dynamic_map)
+        end
+        local force = dft_config and dft_config.coarse_nav_rebuild_on_load == true
+        if _G.dft_coarse_nav_ensure_ready then
+            _G.dft_coarse_nav_ensure_ready(force)
+        end
+    end)
+    if not ok then
+        printf("[DFT] on_loading_screen_key_prompt ERROR: %s", tostring(err))
+    end
+end
+
 actor_on_first_update = function()
     dft_log("actor_on_first_update triggered.")
     dft_unregister_fft_map_handlers()
@@ -254,12 +283,9 @@ actor_on_first_update = function()
 
     dft_build_dynamic_map()
 
-    -- Pre-build road graph cache so first path preview does not hitch the PDA menu.
+    -- Coarse nav is gated on on_loading_screen_key_prompt; try_load here is a harmless cache-only fallback.
     CreateTimeEvent("dft", "warm_graph_cache", 1.5, function()
-        if _G.dft_ensure_level_graph_cache then
-            pcall(_G.dft_ensure_level_graph_cache)
-        end
-        if _G.dft_coarse_nav_try_load then
+        if _G.dft_coarse_nav_try_load and not (_G.dft_coarse_nav_graph_ready and _G.dft_coarse_nav_graph_ready()) then
             pcall(_G.dft_coarse_nav_try_load)
         end
         return true
@@ -620,11 +646,13 @@ on_map_spot_menu_property_clicked = function(pui, id, ln, t)
             dft.travel_mode = "sneaky"
             dft.final_pos  = vector():set(pos.x, pos.y, pos.z)
             dft.final_lvid = lvid
+            dft.last_menu_target_id = id
             dft_start_travel_sequence(pos, lvid, gvid, is_lc, gvid)
         elseif string.find(result, dft_str("dft_menu_travel_here"), 1, true) then
             dft.travel_mode = "normal"
             dft.final_pos  = vector():set(pos.x, pos.y, pos.z)
             dft.final_lvid = lvid
+            dft.last_menu_target_id = id
             dft_start_travel_sequence(pos, lvid, gvid, is_lc, gvid)
         elseif string.find(result, dft_str("dft_menu_hire_guide"), 1, true) then
             dft_log("Hiring guide...")

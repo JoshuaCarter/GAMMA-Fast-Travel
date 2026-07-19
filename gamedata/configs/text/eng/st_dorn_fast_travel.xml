@@ -38,6 +38,9 @@
 	<string id="dft_msg_too_close">
 		<text>Destination is too close.</text>
 	</string>
+	<string id="dft_msg_no_nav_path">
+		<text>No nav path to that destination.</text>
+	</string>
 	<string id="dft_msg_emission_active">
 		<text>Cannot travel during an emission.</text>
 	</string>
